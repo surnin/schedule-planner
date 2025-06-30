@@ -17,7 +17,10 @@ const SettingsModal = ({
   onRemoveTag,
   onAddTag,
   onSettingsChange,
-  onSendTestMessage
+  onSendTestMessage,
+  onAdminChange,
+  onRemoveAdmin,
+  onAddAdmin
 }) => {
   const [activeTab, setActiveTab] = useState('employees');
 
@@ -49,6 +52,18 @@ const SettingsModal = ({
             onClick={() => setActiveTab('tags')}
           >
             Теги
+          </button>
+          <button 
+            className={`tab-btn ${activeTab === 'telegram' ? 'active' : ''}`}
+            onClick={() => setActiveTab('telegram')}
+          >
+            Telegram
+          </button>
+          <button 
+            className={`tab-btn ${activeTab === 'admins' ? 'active' : ''}`}
+            onClick={() => setActiveTab('admins')}
+          >
+            Администраторы
           </button>
           <button 
             className={`tab-btn ${activeTab === 'sync' ? 'active' : ''}`}
@@ -199,6 +214,108 @@ const SettingsModal = ({
                     </button>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'telegram' && (
+            <div className="settings-section">
+              <h3>Telegram Bot</h3>
+              <div className="telegram-settings">
+                <div className="telegram-info">
+                  <p><strong>📋 Инструкция по настройке:</strong></p>
+                  <ol>
+                    <li>Создайте бота через <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer">@BotFather</a></li>
+                    <li>Получите токен бота</li>
+                    <li>Добавьте бота в чат или найдите Chat ID через <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer">@userinfobot</a></li>
+                    <li>Введите данные ниже и включите уведомления</li>
+                  </ol>
+                </div>
+                
+                <label>
+                  <input 
+                    type="checkbox"
+                    checked={settings.telegram?.enabled || false}
+                    onChange={(e) => onSettingsChange('telegram.enabled', e.target.checked)}
+                  />
+                  Включить Telegram уведомления
+                </label>
+                
+                <input 
+                  type="password"
+                  placeholder="Bot Token (например: 123456789:ABCdefGHIjklMNOpqrsTUVwxyz)"
+                  value={settings.telegram?.botToken || ''}
+                  onChange={(e) => onSettingsChange('telegram.botToken', e.target.value)}
+                  disabled={!settings.telegram?.enabled}
+                />
+                
+                <input 
+                  type="text"
+                  placeholder="Chat ID (например: -1001234567890 или 123456789)"
+                  value={settings.telegram?.chatId || ''}
+                  onChange={(e) => onSettingsChange('telegram.chatId', e.target.value)}
+                  disabled={!settings.telegram?.enabled}
+                />
+                
+                {settings.telegram?.enabled && settings.telegram?.botToken && settings.telegram?.chatId && (
+                  <button 
+                    className="btn btn-primary"
+                    onClick={() => {
+                      // Тестовое сообщение будет добавлено позже
+                      alert('Тестовое сообщение будет отправлено при публикации');
+                    }}
+                    style={{ marginTop: '10px' }}
+                  >
+                    🧪 Тест отправки сообщения
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'admins' && (
+            <div className="settings-section">
+              <h3>Администраторы</h3>
+              <div className="admin-info">
+                <p><strong>🔒 Информация:</strong></p>
+                <p>Администраторы могут редактировать расписание. Для входа в режим редактирования нужно ввести имя и пароль администратора.</p>
+              </div>
+              <button 
+                className="add-btn"
+                onClick={onAddAdmin}
+              >
+                + Добавить администратора
+              </button>
+              <div className="admins-list">
+                {(settings.admins || []).map((admin, index) => (
+                  <div key={index} className="admin-item">
+                    <div className="admin-inputs">
+                      <input 
+                        type="text" 
+                        placeholder="Имя администратора"
+                        value={admin.name}
+                        onChange={(e) => onAdminChange(index, 'name', e.target.value)}
+                      />
+                      <input 
+                        type="password" 
+                        placeholder="Пароль"
+                        value={admin.password}
+                        onChange={(e) => onAdminChange(index, 'password', e.target.value)}
+                      />
+                    </div>
+                    <button 
+                      className="remove-btn"
+                      onClick={() => onRemoveAdmin(index)}
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                ))}
+                {(!settings.admins || settings.admins.length === 0) && (
+                  <div className="no-admins-info">
+                    <p>⚠️ Нет администраторов. Пока что редактирование доступно всем.</p>
+                  </div>
+                )}
               </div>
             </div>
           )}

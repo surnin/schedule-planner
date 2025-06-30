@@ -12,7 +12,6 @@ const GridView = ({
   onCellClick,
   onCellRightClick,
   onDateClick,
-  onTagClick,
   shouldShowEmployee
 }) => {
   const getShiftText = (shiftType) => {
@@ -58,7 +57,7 @@ const GridView = ({
                           {getShiftText(schedule[key])}
                         </div>
                         <div className="shift-tags">
-                          {cellTags[key] && cellTags[key].map((tagKey, tagIndex) => {
+                          {cellTags[key] && cellTags[key].map((tagKey) => {
                             const tag = tags[tagKey];
                             if (!tag) return null;
                             return (
@@ -78,7 +77,7 @@ const GridView = ({
                     {!schedule[key] && (
                       <div className="empty-cell">
                         <div className="shift-tags">
-                          {cellTags[key] && cellTags[key].map((tagKey, tagIndex) => {
+                          {cellTags[key] && cellTags[key].map((tagKey) => {
                             const tag = tags[tagKey];
                             if (!tag) return null;
                             return (

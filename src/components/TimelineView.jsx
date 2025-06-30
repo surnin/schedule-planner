@@ -11,7 +11,6 @@ const TimelineView = ({
   tags,
   onCellClick,
   onCellRightClick,
-  onTagClick,
   shouldShowEmployee
 }) => {
   const getShiftText = (shiftType) => {
@@ -59,7 +58,7 @@ const TimelineView = ({
                             {getShiftText(schedule[key])}
                           </div>
                           <div className="shift-tags">
-                            {cellTags[key] && cellTags[key].map((tagKey, tagIndex) => {
+                            {cellTags[key] && cellTags[key].map((tagKey) => {
                               const tag = tags[tagKey];
                               if (!tag) return null;
                               return (
@@ -79,7 +78,7 @@ const TimelineView = ({
                       {!schedule[key] && (
                         <div className="empty-cell">
                           <div className="shift-tags">
-                            {cellTags[key] && cellTags[key].map((tagKey, tagIndex) => {
+                            {cellTags[key] && cellTags[key].map((tagKey) => {
                               const tag = tags[tagKey];
                               if (!tag) return null;
                               return (

@@ -85,7 +85,7 @@ const GanttView = ({
                           {shiftTime.label} ({shiftTime.start}:00-{shiftTime.end}:00)
                         </span>
                         <div className="gantt-tags">
-                          {cellTags[key] && cellTags[key].map((tagKey, tagIndex) => {
+                          {cellTags[key] && cellTags[key].map((tagKey) => {
                             const tag = tags[tagKey];
                             if (!tag) return null;
                             return (
@@ -114,7 +114,7 @@ const GanttView = ({
                           {shiftType === 'sick' && 'Больничный'}
                         </span>
                         <div className="gantt-tags">
-                          {cellTags[key] && cellTags[key].map((tagKey, tagIndex) => {
+                          {cellTags[key] && cellTags[key].map((tagKey) => {
                             const tag = tags[tagKey];
                             if (!tag) return null;
                             return (
@@ -138,7 +138,7 @@ const GanttView = ({
                         onClick={() => onTagClick(empIndex, selectedDay)}
                       >
                         <div className="gantt-tags">
-                          {cellTags[key] && cellTags[key].map((tagKey, tagIndex) => {
+                          {cellTags[key] && cellTags[key].map((tagKey) => {
                             const tag = tags[tagKey];
                             if (!tag) return null;
                             return (

@@ -13,6 +13,12 @@ const Header = ({
   onImportData,
   onClearAllData,
   onDropdownToggle,
+  onPublish,
+  onDownloadPDF,
+  onUnlock,
+  onLock,
+  isAuthenticated,
+  hasAdmins,
   connectionState,
   onlineUsers,
   websocketEnabled
@@ -61,6 +67,34 @@ const Header = ({
           >
             {bulkEditMode ? 'Выйти из массового режима' : 'Массовое редактирование'}
           </button>
+          
+          <div className="publish-group">
+            <button 
+              className="publish-btn telegram"
+              onClick={onPublish}
+              title="Опубликовать в Telegram"
+            >
+              📱
+            </button>
+            <div className="divider"></div>
+            <button 
+              className="publish-btn download"
+              onClick={onDownloadPDF}
+              title="Скачать PDF"
+            >
+              📄
+            </button>
+          </div>
+          
+          {hasAdmins && (
+            <button 
+              className={`lock-btn ${isAuthenticated ? 'unlocked' : 'locked'}`}
+              onClick={isAuthenticated ? onLock : onUnlock}
+              title={isAuthenticated ? 'Заблокировать редактирование' : 'Разблокировать редактирование'}
+            >
+              {isAuthenticated ? '🔓' : '🔒'}
+            </button>
+          )}
           
           <div className={`dropdown ${dropdownOpen ? 'open' : ''}`}>
             <button 

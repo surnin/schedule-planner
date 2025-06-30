@@ -96,12 +96,28 @@ export const useAblyConnection = (settings, schedule, cellTags, onScheduleUpdate
         }
       });
 
+      channel.current.subscribe('push-notification', (message) => {
+        debugLog('📱 Получено push уведомление:', message.data);
+        if (message.data && message.data.userId !== myClientId.current) {
+          debugLog('✅ Показываем push уведомление от другого пользователя');
+          // Показываем уведомление
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification(message.data.title || 'Уведомление', {
+              body: message.data.message || '',
+              icon: '/icon.svg',
+              tag: 'schedule-update',
+              badge: '/icon32.png'
+            });
+          }
+        }
+      });
+
       channel.current.presence.enter({ 
         username: `Пользователь ${Math.floor(Math.random() * 1000)}`,
         joinedAt: new Date().toISOString()
       });
 
-      channel.current.presence.subscribe((presenceMsg) => {
+      channel.current.presence.subscribe(() => {
         channel.current.presence.get((err, members) => {
           if (!err && Array.isArray(members)) {
             setOnlineUsers(new Set(members.map(member => member.data.username)));
@@ -202,6 +218,21 @@ export const useAblyConnection = (settings, schedule, cellTags, onScheduleUpdate
     }
   };
 
+  const sendPushNotification = (title, message) => {
+    if (channel.current && connectionState === 'connected') {
+      const notificationData = {
+        title,
+        message,
+        timestamp: new Date().toISOString(),
+        userId: myClientId.current
+      };
+      debugLog('📱 Отправляем push уведомление через WebSocket:', notificationData);
+      channel.current.publish('push-notification', notificationData);
+    } else {
+      debugLog('❌ Не можем отправить push уведомление: канал не готов');
+    }
+  };
+
   useEffect(() => {
     disconnectFromAbly();
     
@@ -229,6 +260,7 @@ export const useAblyConnection = (settings, schedule, cellTags, onScheduleUpdate
     publishScheduleUpdate,
     publishSettingsUpdate,
     publishCellTagsUpdate,
-    sendTestMessage
+    sendTestMessage,
+    sendPushNotification
   };
 };
