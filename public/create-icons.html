@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Icon Creator</title>
+</head>
+<body>
+    <canvas id="canvas16" width="16" height="16"></canvas>
+    <canvas id="canvas32" width="32" height="32"></canvas>
+    <canvas id="canvas48" width="48" height="48"></canvas>
+    <canvas id="canvas128" width="128" height="128"></canvas>
+    
+    <script>
+        function createIcon(canvasId, size) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            
+            // Фон
+            ctx.fillStyle = '#4a90e2';
+            ctx.fillRect(0, 0, size, size);
+            
+            // Календарная сетка
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = Math.max(1, size / 32);
+            
+            const margin = size * 0.15;
+            const gridSize = size - margin * 2;
+            const cellSize = gridSize / 4;
+            
+            // Рисуем сетку
+            for (let i = 0; i <= 4; i++) {
+                ctx.beginPath();
+                ctx.moveTo(margin + i * cellSize, margin);
+                ctx.lineTo(margin + i * cellSize, margin + gridSize);
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.moveTo(margin, margin + i * cellSize);
+                ctx.lineTo(margin + gridSize, margin + i * cellSize);
+                ctx.stroke();
+            }
+            
+            // Добавляем несколько "смен" (закрашенные ячейки)
+            ctx.fillStyle = '#ff6b6b';
+            ctx.fillRect(margin + cellSize, margin + cellSize, cellSize, cellSize);
+            
+            ctx.fillStyle = '#4ecdc4';
+            ctx.fillRect(margin + cellSize * 2, margin + cellSize, cellSize, cellSize);
+            
+            ctx.fillStyle = '#45b7d1';
+            ctx.fillRect(margin + cellSize, margin + cellSize * 2, cellSize, cellSize);
+            
+            // Скачиваем иконку
+            const link = document.createElement('a');
+            link.download = `icon${size}.png`;
+            link.href = canvas.toDataURL();
+            link.click();
+        }
+        
+        // Создаем все иконки
+        setTimeout(() => {
+            createIcon('canvas16', 16);
+            setTimeout(() => createIcon('canvas32', 32), 100);
+            setTimeout(() => createIcon('canvas48', 48), 200);
+            setTimeout(() => createIcon('canvas128', 128), 300);
+        }, 100);
+    </script>
+</body>
+</html>
