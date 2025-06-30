@@ -1,5 +1,4 @@
 import React from 'react';
-import { dayLabels } from '../constants/defaultData';
 
 const TimelineView = ({ 
   employees, 
@@ -9,6 +8,11 @@ const TimelineView = ({
   bulkEditMode,
   cellTags,
   tags,
+  dayLabels,
+  viewPeriod,
+  getScheduleByDate,
+  getCellTagsByDate,
+  getDateKey,
   onCellClick,
   onCellRightClick,
   shouldShowEmployee
@@ -23,16 +27,19 @@ const TimelineView = ({
         <div className="timeline-header">
           <div className="timeline-employee-header">Сотрудник</div>
           <div className="timeline-dates">
-            {dayLabels.map((label, index) => (
-              <div 
-                key={index}
-                className={`timeline-date ${
-                  index === 5 || index === 6 || index === 12 || index === 13 ? 'weekend' : ''
-                } ${index === 8 ? 'today' : ''}`}
-              >
-                {label}
-              </div>
-            ))}
+            {dayLabels.map((label, index) => {
+              const dayOfWeek = (index % 7);
+              const isWeekend = dayOfWeek === 5 || dayOfWeek === 6;
+              
+              return (
+                <div 
+                  key={index}
+                  className={`timeline-date ${isWeekend ? 'weekend' : ''}`}
+                >
+                  {label}
+                </div>
+              );
+            })}
           </div>
         </div>
         {employees.map((employee, empIndex) => {
@@ -42,9 +49,12 @@ const TimelineView = ({
             <div className="timeline-row" key={empIndex}>
               <div className="timeline-employee">{employee}</div>
               <div className="timeline-schedule">
-                {Array.from({ length: 14 }, (_, dayIndex) => {
-                  const key = `${empIndex}-${dayIndex}`;
-                  const isSelected = selectedCells.has(key);
+                {Array.from({ length: viewPeriod }, (_, dayIndex) => {
+                  const dateKey = getDateKey(empIndex, dayIndex);
+                  const shiftType = getScheduleByDate(empIndex, dayIndex);
+                  const cellTagsForDate = getCellTagsByDate(empIndex, dayIndex);
+                  const isSelected = selectedCells.has(dateKey);
+                  
                   return (
                     <div
                       key={dayIndex}
@@ -52,13 +62,13 @@ const TimelineView = ({
                       onClick={() => onCellClick(empIndex, dayIndex)}
                       onContextMenu={onCellRightClick}
                     >
-                      {schedule[key] && (
-                        <div className={`shift-card shift-${schedule[key]}`}>
+                      {shiftType && (
+                        <div className={`shift-card shift-${shiftType}`}>
                           <div className="shift-symbol">
-                            {getShiftText(schedule[key])}
+                            {getShiftText(shiftType)}
                           </div>
                           <div className="shift-tags">
-                            {cellTags[key] && cellTags[key].map((tagKey) => {
+                            {cellTagsForDate && cellTagsForDate.map((tagKey) => {
                               const tag = tags[tagKey];
                               if (!tag) return null;
                               return (
@@ -75,10 +85,10 @@ const TimelineView = ({
                           </div>
                         </div>
                       )}
-                      {!schedule[key] && (
+                      {!shiftType && (
                         <div className="empty-cell">
                           <div className="shift-tags">
-                            {cellTags[key] && cellTags[key].map((tagKey) => {
+                            {cellTagsForDate && cellTagsForDate.map((tagKey) => {
                               const tag = tags[tagKey];
                               if (!tag) return null;
                               return (

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import * as Ably from 'ably';
 
-export const useAblyConnection = (settings, schedule, cellTags, onScheduleUpdate, onSettingsUpdate, onCellTagsUpdate) => {
+export const useAblyConnection = (settings, schedule, cellTags, onScheduleUpdate, onSettingsUpdate, onCellTagsUpdate, onAuthStateUpdate) => {
   const ablyClient = useRef(null);
   const channel = useRef(null);
   const myClientId = useRef(null);
@@ -86,6 +86,15 @@ export const useAblyConnection = (settings, schedule, cellTags, onScheduleUpdate
         if (message.data && message.data.cellTags && message.data.userId !== myClientId.current) {
           debugLog('Применяем изменения тегов ячеек от другого пользователя');
           onCellTagsUpdate(message.data.cellTags);
+        }
+      });
+
+      // Новый канал для синхронизации состояния аутентификации
+      channel.current.subscribe('auth-state-update', (message) => {
+        debugLog('Получено обновление состояния аутентификации:', message.data);
+        if (message.data && message.data.userId !== myClientId.current && onAuthStateUpdate) {
+          debugLog('Применяем изменения состояния аутентификации от другого пользователя');
+          onAuthStateUpdate(message.data.isAuthenticated, message.data.admins);
         }
       });
 
@@ -254,12 +263,28 @@ export const useAblyConnection = (settings, schedule, cellTags, onScheduleUpdate
     };
   }, [settings.websocket.enabled, settings.websocket.apiKey, settings.websocket.roomId]);
 
+  const publishAuthStateUpdate = (isAuthenticated, admins) => {
+    if (channel.current && connectionState === 'connected') {
+      const message = {
+        isAuthenticated,
+        admins,
+        timestamp: new Date().toISOString(),
+        userId: myClientId.current
+      };
+      debugLog('📡 Отправляем обновление состояния аутентификации:', message);
+      channel.current.publish('auth-state-update', message);
+    } else {
+      debugLog('❌ Не можем отправить обновление состояния аутентификации: канал не готов');
+    }
+  };
+
   return {
     connectionState,
     onlineUsers,
     publishScheduleUpdate,
     publishSettingsUpdate,
     publishCellTagsUpdate,
+    publishAuthStateUpdate,
     sendTestMessage,
     sendPushNotification
   };

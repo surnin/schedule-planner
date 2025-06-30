@@ -6,10 +6,10 @@ import html2canvas from 'html2canvas';
 // FontAwesome setup
 import { library } from '@fortawesome/fontawesome-svg-core';
 import { faTelegram } from '@fortawesome/free-brands-svg-icons';
-import { faDownload, faCog, faLock, faLockOpen } from '@fortawesome/free-solid-svg-icons';
+import { faDownload, faCog, faLock, faLockOpen, faChevronLeft, faChevronRight, faCalendarDays } from '@fortawesome/free-solid-svg-icons';
 
 // Add icons to the library
-library.add(faTelegram, faDownload, faCog, faLock, faLockOpen);
+library.add(faTelegram, faDownload, faCog, faLock, faLockOpen, faChevronLeft, faChevronRight, faCalendarDays);
 
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useAblyConnection } from './hooks/useAblyConnection';
@@ -24,6 +24,7 @@ import GanttView from './components/GanttView';
 import SettingsModal from './components/SettingsModal';
 import ShiftAndTagPopup from './components/ShiftAndTagPopup';
 import AuthModal from './components/AuthModal';
+import CalendarNavigation from './components/CalendarNavigation';
 
 function App() {
   const [settings, setSettings] = useLocalStorage('schedule-planner-settings', {
@@ -42,8 +43,13 @@ function App() {
       chatId: ''
     },
     admins: [],
-    debug: false
+    debug: true  // Включаем отладку для диагностики
   });
+
+  // Отладочная информация при изменении администраторов
+  useEffect(() => {
+    console.log('👥 Администраторы изменились:', settings.admins);
+  }, [settings.admins]);
 
   const [schedule, setSchedule] = useLocalStorage('schedule-planner-data', () => {
     const initial = {};
@@ -62,13 +68,26 @@ function App() {
   const [selectedDay, setSelectedDay] = useLocalStorage('schedule-planner-selected-day', null);
   const [filters, setFilters] = useLocalStorage('schedule-planner-filters', defaultFilters);
   const [cellTags, setCellTags] = useLocalStorage('schedule-planner-tags', {});
+  
+  // Новые состояния для расширенного календаря
+  const getDefaultStartDate = () => {
+    // Начинаем с текущего понедельника
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+    return monday.toISOString().split('T')[0];
+  };
+  
+  const [currentStartDate, setCurrentStartDate] = useLocalStorage('schedule-planner-start-date', getDefaultStartDate());
+  const [viewPeriod, setViewPeriod] = useLocalStorage('schedule-planner-view-period', 14);
 
   const [popup, setPopup] = useState({ open: false, empIndex: null, dayIndex: null, selectedTags: [] });
   const [settingsModal, setSettingsModal] = useState(false);
   const [bulkEditMode, setBulkEditMode] = useState(false);
   const [selectedCells, setSelectedCells] = useState(new Set());
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(true); // По умолчанию разрешено редактирование
+  const [isAuthenticated, setIsAuthenticated] = useLocalStorage('schedule-planner-auth', true); // По умолчанию разрешено редактирование
   const [authModal, setAuthModal] = useState(false);
 
   const handleScheduleUpdate = (newSchedule) => {
@@ -76,20 +95,203 @@ function App() {
   };
 
   const handleSettingsUpdate = (newSettings) => {
-    setSettings(prev => ({
-      ...prev,
-      employees: newSettings.employees || prev.employees,
-      shiftTypes: newSettings.shiftTypes || prev.shiftTypes,
-      tags: newSettings.tags || prev.tags
-    }));
+    console.log('🔄 Получено обновление настроек из WebSocket:', newSettings);
+    setSettings(prev => {
+      console.log('📋 Предыдущие настройки:', prev);
+      
+      // Убеждаемся что все поля корректно обрабатываются
+      const updatedSettings = {
+        ...prev,
+        employees: newSettings.employees !== undefined ? newSettings.employees : prev.employees,
+        shiftTypes: newSettings.shiftTypes !== undefined ? newSettings.shiftTypes : prev.shiftTypes,
+        tags: newSettings.tags !== undefined ? newSettings.tags : prev.tags,
+        // Особая обработка для администраторов - если пришел undefined, сохраняем текущих
+        admins: newSettings.admins !== undefined ? newSettings.admins : (prev.admins || []),
+        websocket: newSettings.websocket !== undefined ? newSettings.websocket : prev.websocket,
+        telegram: newSettings.telegram !== undefined ? newSettings.telegram : prev.telegram,
+        debug: newSettings.debug !== undefined ? newSettings.debug : (prev.debug || false)
+      };
+      
+      console.log('✅ Обновленные настройки:', updatedSettings);
+      console.log('👥 Администраторы после обновления:', updatedSettings.admins);
+      
+      // Если администраторы изменились, сбрасываем аутентификацию
+      if (newSettings.admins !== undefined && JSON.stringify(newSettings.admins) !== JSON.stringify(prev.admins || [])) {
+        console.log('🔐 Сбрасываем аутентификацию из-за изменения администраторов');
+        setIsAuthenticated(false);
+      }
+      
+      return updatedSettings;
+    });
   };
 
   const handleCellTagsUpdate = (newCellTags) => {
     setCellTags(newCellTags);
   };
 
-  const { connectionState, onlineUsers, publishScheduleUpdate, publishSettingsUpdate, publishCellTagsUpdate, sendTestMessage, sendPushNotification: sendWebSocketPushNotification } = 
-    useAblyConnection(settings, schedule, cellTags, handleScheduleUpdate, handleSettingsUpdate, handleCellTagsUpdate);
+  // Функция для обработки обновлений состояния аутентификации от других браузеров
+  const handleAuthStateUpdate = (isAuthenticated, admins) => {
+    console.log('🔄 Получено обновление состояния аутентификации:', { isAuthenticated, admins });
+    
+    // Обновляем администраторов в настройках
+    if (admins && admins.length > 0) {
+      setSettings(prev => ({
+        ...prev,
+        admins: admins
+      }));
+      
+      // Принудительно сохраняем в localStorage
+      const newSettings = { ...settings, admins: admins };
+      localStorage.setItem('schedule-planner-settings', JSON.stringify(newSettings));
+      console.log('💾 Администраторы синхронизированы и сохранены');
+    }
+    
+    // Обновляем состояние аутентификации
+    setIsAuthenticated(isAuthenticated);
+    console.log('🔐 Состояние аутентификации обновлено:', isAuthenticated);
+  };
+
+  const { connectionState, onlineUsers, publishScheduleUpdate, publishSettingsUpdate, publishCellTagsUpdate, publishAuthStateUpdate, sendTestMessage, sendPushNotification: sendWebSocketPushNotification } = 
+    useAblyConnection(settings, schedule, cellTags, handleScheduleUpdate, handleSettingsUpdate, handleCellTagsUpdate, handleAuthStateUpdate);
+
+  // Отладочная информация при загрузке
+  useEffect(() => {
+    console.log('🚀 Приложение загружено');
+    console.log('📋 Текущие настройки при загрузке:', settings);
+    console.log('👥 Администраторы при загрузке:', settings.admins);
+    console.log('🔐 Аутентификация при загрузке:', localStorage.getItem('schedule-planner-auth'));
+    console.log('🌐 WebSocket настройки:', settings.websocket);
+    console.log('🔗 Состояние подключения:', connectionState);
+  }, []);
+
+  // Отладочная информация при изменении состояния подключения
+  useEffect(() => {
+    console.log('🔗 Состояние WebSocket изменилось:', connectionState);
+  }, [connectionState]);
+
+  // Функция генерации дат для текущего периода
+  const generateDayLabels = (startDate, days) => {
+    try {
+      const labels = [];
+      const start = new Date(startDate);
+      
+      // Проверяем что дата валидна
+      if (isNaN(start.getTime())) {
+        console.error('❌ Невалидная дата в generateDayLabels:', startDate);
+        // Fallback на сегодняшнюю дату
+        const today = new Date();
+        const dayOfWeek = today.getDay();
+        const monday = new Date(today);
+        monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+        return generateDayLabels(monday.toISOString().split('T')[0], days);
+      }
+      
+      const dayNames = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+      const monthNames = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 
+                         'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+      
+      for (let i = 0; i < days; i++) {
+        const currentDate = new Date(start);
+        currentDate.setDate(start.getDate() + i);
+        
+        const dayName = dayNames[currentDate.getDay()];
+        const dayNum = currentDate.getDate();
+        const monthName = monthNames[currentDate.getMonth()];
+        
+        // Если дата в новом месяце, показываем месяц
+        if (i === 0 || currentDate.getDate() === 1) {
+          labels.push(`${dayName} ${dayNum} ${monthName}`);
+        } else {
+          labels.push(`${dayName} ${dayNum}`);
+        }
+      }
+      return labels;
+    } catch (error) {
+      console.error('❌ Ошибка в generateDayLabels:', error);
+      // Fallback на сегодняшнюю дату
+      const today = new Date();
+      const dayOfWeek = today.getDay();
+      const monday = new Date(today);
+      monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+      return generateDayLabels(monday.toISOString().split('T')[0], days);
+    }
+  };
+
+  // Генерируем текущие dayLabels динамически
+  const dynamicDayLabels = generateDayLabels(currentStartDate, viewPeriod);
+
+  // Функции для конвертации между индексами и датами
+  const getDateFromIndex = (dayIndex) => {
+    try {
+      const start = new Date(currentStartDate);
+      // Проверяем что дата валидна
+      if (isNaN(start.getTime())) {
+        console.error('❌ Невалидная дата в currentStartDate:', currentStartDate);
+        // Возвращаем сегодняшнюю дату как fallback
+        const today = new Date();
+        const targetDate = new Date(today);
+        targetDate.setDate(today.getDate() + dayIndex);
+        return targetDate.toISOString().split('T')[0];
+      }
+      
+      const targetDate = new Date(start);
+      targetDate.setDate(start.getDate() + dayIndex);
+      return targetDate.toISOString().split('T')[0];
+    } catch (error) {
+      console.error('❌ Ошибка в getDateFromIndex:', error);
+      // Fallback на сегодняшнюю дату
+      const today = new Date();
+      const targetDate = new Date(today);
+      targetDate.setDate(today.getDate() + dayIndex);
+      return targetDate.toISOString().split('T')[0];
+    }
+  };
+
+  const getDateKey = (empIndex, dayIndex) => {
+    const dateStr = getDateFromIndex(dayIndex);
+    return `${empIndex}-${dateStr}`;
+  };
+
+  // Функция для получения расписания по дате
+  const getScheduleByDate = (empIndex, dayIndex) => {
+    const dateKey = getDateKey(empIndex, dayIndex);
+    return schedule[dateKey];
+  };
+
+  // Функция для установки расписания по дате
+  const setScheduleByDate = (empIndex, dayIndex, shiftType) => {
+    const dateKey = getDateKey(empIndex, dayIndex);
+    setSchedule(prev => {
+      const newSchedule = { ...prev };
+      if (shiftType === 'clear' || !shiftType) {
+        delete newSchedule[dateKey];
+      } else {
+        newSchedule[dateKey] = shiftType;
+      }
+      publishScheduleUpdate(newSchedule);
+      return newSchedule;
+    });
+  };
+
+  // Функции для работы с тегами по датам
+  const getCellTagsByDate = (empIndex, dayIndex) => {
+    const dateKey = getDateKey(empIndex, dayIndex);
+    return cellTags[dateKey] || [];
+  };
+
+  const setCellTagsByDate = (empIndex, dayIndex, tags) => {
+    const dateKey = getDateKey(empIndex, dayIndex);
+    setCellTags(prev => {
+      const newCellTags = { ...prev };
+      if (!tags || tags.length === 0) {
+        delete newCellTags[dateKey];
+      } else {
+        newCellTags[dateKey] = tags;
+      }
+      publishCellTagsUpdate(newCellTags);
+      return newCellTags;
+    });
+  };
 
   // Обновляем стили при изменении типов смен
   useEffect(() => {
@@ -206,17 +408,8 @@ function App() {
     } else {
       if (popup.empIndex === null || popup.dayIndex === null) return;
       
-      const key = `${popup.empIndex}-${popup.dayIndex}`;
-      setSchedule(prev => {
-        newSchedule = { ...prev };
-        if (shiftType === 'clear') {
-          delete newSchedule[key];
-        } else {
-          newSchedule[key] = shiftType;
-        }
-        publishScheduleUpdate(newSchedule);
-        return newSchedule;
-      });
+      // Используем новую систему с датами
+      setScheduleByDate(popup.empIndex, popup.dayIndex, shiftType);
     }
     
     setPopup({ open: false, empIndex: null, dayIndex: null });
@@ -230,19 +423,18 @@ function App() {
     }
 
     if (bulkEditMode) {
-      const key = `${empIndex}-${dayIndex}`;
+      const dateKey = getDateKey(empIndex, dayIndex);
       setSelectedCells(prev => {
         const newSet = new Set(prev);
-        if (newSet.has(key)) {
-          newSet.delete(key);
+        if (newSet.has(dateKey)) {
+          newSet.delete(dateKey);
         } else {
-          newSet.add(key);
+          newSet.add(dateKey);
         }
         return newSet;
       });
     } else {
-      const cellKey = `${empIndex}-${dayIndex}`;
-      const currentTags = cellTags[cellKey] || [];
+      const currentTags = getCellTagsByDate(empIndex, dayIndex);
       setPopup({ open: true, empIndex, dayIndex, selectedTags: currentTags });
     }
   };
@@ -274,9 +466,8 @@ function App() {
   };
 
   const shouldShowEmployee = (empIndex) => {
-    for (let day = 0; day < 14; day++) {
-      const key = `${empIndex}-${day}`;
-      const shiftType = schedule[key];
+    for (let day = 0; day < viewPeriod; day++) {
+      const shiftType = getScheduleByDate(empIndex, day);
       
       // Проверяем пустые ячейки (undefined или пустая строка)
       if ((!shiftType || shiftType === '') && filters.empty) return true;
@@ -350,18 +541,45 @@ function App() {
   // Функции управления администраторами
   const handleAdminChange = (index, field, value) => {
     const currentAdmins = settings.admins || [];
+    console.log('🔧 Изменяем администратора:', { index, field, value, currentAdmins });
+    
+    // Убеждаемся что администратор с данным индексом существует
+    if (index >= currentAdmins.length) {
+      console.error('❌ Попытка изменить несуществующего администратора:', index);
+      return;
+    }
+    
     const newAdmins = [...currentAdmins];
     newAdmins[index] = { ...newAdmins[index], [field]: value };
     const newSettings = { ...settings, admins: newAdmins };
+    console.log('📦 Новые настройки с админами:', newSettings);
+    
+    // Принудительно сохраняем в localStorage
+    localStorage.setItem('schedule-planner-settings', JSON.stringify(newSettings));
+    console.log('💾 Принудительно сохранено в localStorage');
+    
     setSettings(newSettings);
     publishSettingsUpdate(newSettings);
+    
+    // Отправляем обновленный список администраторов в другие браузеры
+    publishAuthStateUpdate(isAuthenticated, newAdmins);
+    console.log('📡 Отправлены обновленные администраторы в другие браузеры');
   };
 
   const handleRemoveAdmin = (index) => {
     const newAdmins = settings.admins.filter((_, i) => i !== index);
     const newSettings = { ...settings, admins: newAdmins };
+    
+    // Принудительно сохраняем в localStorage
+    localStorage.setItem('schedule-planner-settings', JSON.stringify(newSettings));
+    console.log('💾 Администратор удален и сохранено в localStorage');
+    
     setSettings(newSettings);
     publishSettingsUpdate(newSettings);
+    
+    // Отправляем обновленный список администраторов в другие браузеры
+    publishAuthStateUpdate(isAuthenticated, newAdmins);
+    console.log('📡 Отправлены обновленные администраторы в другие браузеры');
   };
 
   const handleAddAdmin = () => {
@@ -372,8 +590,19 @@ function App() {
     const currentAdmins = settings.admins || [];
     const newAdmins = [...currentAdmins, newAdmin];
     const newSettings = { ...settings, admins: newAdmins };
+    console.log('🔧 Добавляем администратора:', newAdmin);
+    console.log('📦 Новые настройки:', newSettings);
+    
+    // Принудительно сохраняем в localStorage
+    localStorage.setItem('schedule-planner-settings', JSON.stringify(newSettings));
+    console.log('💾 Принудительно сохранено в localStorage');
+    
     setSettings(newSettings);
     publishSettingsUpdate(newSettings);
+    
+    // Отправляем обновленный список администраторов в другие браузеры
+    publishAuthStateUpdate(isAuthenticated, newAdmins);
+    console.log('📡 Отправлены обновленные администраторы в другие браузеры');
   };
 
   // Проверка авторизации
@@ -397,9 +626,18 @@ function App() {
   // Функция блокировки редактирования
   const handleLock = () => {
     setIsAuthenticated(false);
+    // Отправляем состояние блокировки в другие браузеры
+    publishAuthStateUpdate(false, settings.admins || []);
+    console.log('🔒 Отправлено состояние блокировки в другие браузеры');
   };
 
   const clearAllData = () => {
+    // Проверяем авторизацию
+    if (!checkAuthentication()) {
+      alert('Очистка данных заблокирована. Войдите как администратор для доступа к этой функции.');
+      return;
+    }
+
     if (confirm('Вы уверены, что хотите очистить все данные? Это действие нельзя отменить.')) {
       const emptySchedule = {};
       const emptyCellTags = {};
@@ -487,8 +725,7 @@ function App() {
       
       // Обновляем теги ячейки для обычного режима
       if (prev.empIndex !== null && prev.dayIndex !== null) {
-        const cellKey = `${prev.empIndex}-${prev.dayIndex}`;
-        handleCellTagsChange(cellKey, newSelectedTags);
+        setCellTagsByDate(prev.empIndex, prev.dayIndex, newSelectedTags);
       }
       // Обновляем теги для всех выбранных ячеек в bulk режиме  
       else if (bulkEditMode && selectedCells.size > 0) {
@@ -530,6 +767,17 @@ function App() {
       publishCellTagsUpdate(newCellTags);
       return newCellTags;
     });
+  };
+
+  const handleTagClick = (empIndex, dayIndex) => {
+    // Проверяем авторизацию
+    if (!checkAuthentication()) {
+      alert('Редактирование заблокировано. Войдите как администратор для редактирования расписания.');
+      return;
+    }
+
+    const currentTags = getCellTagsByDate(empIndex, dayIndex);
+    setPopup({ open: true, empIndex, dayIndex, selectedTags: currentTags });
   };
 
   // Функция для отправки Push уведомлений
@@ -584,8 +832,8 @@ function App() {
 
       // Добавляем заголовок с дополнительной информацией
       const currentDate = new Date();
-      const firstDay = dayLabels[0] || 'пн';
-      const lastDay = dayLabels[dayLabels.length - 1] || 'вс';
+      const firstDay = dynamicDayLabels[0] || 'пн';
+      const lastDay = dynamicDayLabels[dynamicDayLabels.length - 1] || 'вс';
       
       const titleElement = document.createElement('div');
       titleElement.style.cssText = `
@@ -885,7 +1133,13 @@ function App() {
         websocketEnabled={settings.websocket.enabled}
         onViewSwitch={setCurrentView}
         onBulkEditToggle={toggleBulkEdit}
-        onSettingsOpen={() => setSettingsModal(true)}
+        onSettingsOpen={() => {
+          if (!checkAuthentication()) {
+            alert('Настройки заблокированы. Войдите как администратор для доступа к настройкам.');
+            return;
+          }
+          setSettingsModal(true);
+        }}
         onExportData={exportData}
         onImportData={importData}
         onClearAllData={clearAllData}
@@ -899,6 +1153,13 @@ function App() {
       />
       
       <div className="content">
+        <CalendarNavigation 
+          currentStartDate={currentStartDate}
+          viewPeriod={viewPeriod}
+          onStartDateChange={setCurrentStartDate}
+          dynamicDayLabels={dynamicDayLabels}
+        />
+        
         <Legend 
           shiftTypes={settings.shiftTypes}
           filters={filters}
@@ -914,6 +1175,11 @@ function App() {
             bulkEditMode={bulkEditMode}
             cellTags={cellTags}
             tags={settings.tags}
+            dayLabels={dynamicDayLabels}
+            viewPeriod={viewPeriod}
+            getScheduleByDate={getScheduleByDate}
+            getCellTagsByDate={getCellTagsByDate}
+            getDateKey={getDateKey}
             onCellClick={handleCellClick}
             onCellRightClick={handleCellRightClick}
             onDateClick={handleDateClick}
@@ -930,6 +1196,11 @@ function App() {
             bulkEditMode={bulkEditMode}
             cellTags={cellTags}
             tags={settings.tags}
+            dayLabels={dynamicDayLabels}
+            viewPeriod={viewPeriod}
+            getScheduleByDate={getScheduleByDate}
+            getCellTagsByDate={getCellTagsByDate}
+            getDateKey={getDateKey}
             onCellClick={handleCellClick}
             onCellRightClick={handleCellRightClick}
             shouldShowEmployee={shouldShowEmployee}
@@ -944,8 +1215,12 @@ function App() {
             selectedDay={selectedDay}
             cellTags={cellTags}
             tags={settings.tags}
+            dayLabels={dynamicDayLabels}
+            getScheduleByDate={getScheduleByDate}
+            getCellTagsByDate={getCellTagsByDate}
             onBackToGrid={() => setCurrentView('grid')}
             onDaySelect={setSelectedDay}
+            onTagClick={handleTagClick}
             shouldShowEmployee={shouldShowEmployee}
           />
         )}

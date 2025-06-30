@@ -5,7 +5,19 @@ export const useLocalStorage = (key, defaultValue) => {
     const saved = localStorage.getItem(key);
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsedValue = JSON.parse(saved);
+        // Для настроек нужно объединить с дефолтными значениями
+        if (key === 'schedule-planner-settings') {
+          const mergedValue = {
+            ...defaultValue,
+            ...parsedValue,
+            // Убеждаемся что admins всегда существует
+            admins: parsedValue.admins || []
+          };
+          console.log('🔧 Объединяем настройки:', mergedValue);
+          return mergedValue;
+        }
+        return parsedValue;
       } catch (e) {
         console.error(`Error loading ${key} from localStorage:`, e);
       }

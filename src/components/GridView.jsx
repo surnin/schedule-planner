@@ -1,5 +1,4 @@
 import React from 'react';
-import { dayLabels } from '../constants/defaultData';
 
 const GridView = ({ 
   employees, 
@@ -9,6 +8,11 @@ const GridView = ({
   bulkEditMode,
   cellTags,
   tags,
+  dayLabels,
+  viewPeriod,
+  getScheduleByDate,
+  getCellTagsByDate,
+  getDateKey,
   onCellClick,
   onCellRightClick,
   onDateClick,
@@ -23,17 +27,21 @@ const GridView = ({
       <div className="schedule-grid">
         <div className="grid-header">
           <div>Имя</div>
-          {dayLabels.map((label, index) => (
-            <div 
-              key={index}
-              className={`date-header ${
-                index === 5 || index === 6 || index === 12 || index === 13 ? 'weekend' : ''
-              } ${index === 8 ? 'today' : ''}`}
-              onClick={() => onDateClick(index)}
-            >
-              {label}
-            </div>
-          ))}
+          {dayLabels.map((label, index) => {
+            // Determine if it's weekend based on day of week (Saturday=6, Sunday=0)
+            const dayOfWeek = (index % 7);
+            const isWeekend = dayOfWeek === 5 || dayOfWeek === 6; // Saturday or Sunday
+            
+            return (
+              <div 
+                key={index}
+                className={`date-header ${isWeekend ? 'weekend' : ''}`}
+                onClick={() => onDateClick(index)}
+              >
+                {label}
+              </div>
+            );
+          })}
         </div>
         {employees.map((employee, empIndex) => {
           if (!shouldShowEmployee(empIndex)) return null;
@@ -41,9 +49,12 @@ const GridView = ({
           return (
             <div className="grid-row" key={empIndex}>
               <div className="employee-name">{employee}</div>
-              {Array.from({ length: 14 }, (_, dayIndex) => {
-                const key = `${empIndex}-${dayIndex}`;
-                const isSelected = selectedCells.has(key);
+              {Array.from({ length: viewPeriod }, (_, dayIndex) => {
+                const dateKey = getDateKey(empIndex, dayIndex);
+                const shiftType = getScheduleByDate(empIndex, dayIndex);
+                const cellTagsForDate = getCellTagsByDate(empIndex, dayIndex);
+                const isSelected = selectedCells.has(dateKey);
+                
                 return (
                   <div
                     key={dayIndex}
@@ -51,13 +62,13 @@ const GridView = ({
                     onClick={() => onCellClick(empIndex, dayIndex)}
                     onContextMenu={onCellRightClick}
                   >
-                    {schedule[key] && (
-                      <div className={`shift-card shift-${schedule[key]}`}>
+                    {shiftType && (
+                      <div className={`shift-card shift-${shiftType}`}>
                         <div className="shift-symbol">
-                          {getShiftText(schedule[key])}
+                          {getShiftText(shiftType)}
                         </div>
                         <div className="shift-tags">
-                          {cellTags[key] && cellTags[key].map((tagKey) => {
+                          {cellTagsForDate && cellTagsForDate.map((tagKey) => {
                             const tag = tags[tagKey];
                             if (!tag) return null;
                             return (
@@ -74,10 +85,10 @@ const GridView = ({
                         </div>
                       </div>
                     )}
-                    {!schedule[key] && (
+                    {!shiftType && (
                       <div className="empty-cell">
                         <div className="shift-tags">
-                          {cellTags[key] && cellTags[key].map((tagKey) => {
+                          {cellTagsForDate && cellTagsForDate.map((tagKey) => {
                             const tag = tags[tagKey];
                             if (!tag) return null;
                             return (

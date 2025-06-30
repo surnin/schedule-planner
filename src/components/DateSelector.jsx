@@ -1,22 +1,26 @@
 import React from 'react';
-import { dayLabels } from '../constants/defaultData';
 
-const DateSelector = ({ selectedDay, onDaySelect }) => {
+const DateSelector = ({ selectedDay, onDaySelect, dayLabels }) => {
   return (
     <div className="date-selector">
       <div className="date-selector-header">Выберите дату:</div>
-      <div className="date-options">
-        {dayLabels.map((label, index) => (
-          <button
-            key={index}
-            className={`date-option ${selectedDay === index ? 'active' : ''} ${
-              index === 5 || index === 6 || index === 12 || index === 13 ? 'weekend' : ''
-            } ${index === 8 ? 'today' : ''}`}
-            onClick={() => onDaySelect(index)}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="date-header-row">
+        {dayLabels.map((label, index) => {
+          const dayOfWeek = (index % 7);
+          const isWeekend = dayOfWeek === 5 || dayOfWeek === 6;
+          
+          return (
+            <div
+              key={index}
+              className={`date-header ${selectedDay === index ? 'active' : ''} ${
+                isWeekend ? 'weekend' : ''
+              }`}
+              onClick={() => onDaySelect(index)}
+            >
+              {label}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

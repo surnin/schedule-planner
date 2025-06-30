@@ -1,5 +1,4 @@
 import React from 'react';
-import { dayLabels } from '../constants/defaultData';
 import DateSelector from './DateSelector';
 
 const GanttView = ({ 
@@ -9,6 +8,9 @@ const GanttView = ({
   selectedDay,
   cellTags,
   tags,
+  dayLabels,
+  getScheduleByDate,
+  getCellTagsByDate,
   onBackToGrid,
   onDaySelect,
   onTagClick,
@@ -40,6 +42,7 @@ const GanttView = ({
       <DateSelector 
         selectedDay={selectedDay}
         onDaySelect={onDaySelect}
+        dayLabels={dayLabels}
       />
       
       <div className="gantt-container">
@@ -58,8 +61,8 @@ const GanttView = ({
           <div className="gantt-employees-header">Сотрудник</div>
           <div className="gantt-rows">
             {employees.map((employee, empIndex) => {
-              const key = `${empIndex}-${selectedDay}`;
-              const shiftType = schedule[key];
+              const shiftType = getScheduleByDate(empIndex, selectedDay);
+              const cellTagsForDate = getCellTagsByDate(empIndex, selectedDay);
               const shiftTime = shiftType ? getShiftTime(shiftType) : null;
               
               if (!shouldShowEmployee(empIndex)) return null;
@@ -85,7 +88,7 @@ const GanttView = ({
                           {shiftTime.label} ({shiftTime.start}:00-{shiftTime.end}:00)
                         </span>
                         <div className="gantt-tags">
-                          {cellTags[key] && cellTags[key].map((tagKey) => {
+                          {cellTagsForDate && cellTagsForDate.map((tagKey) => {
                             const tag = tags[tagKey];
                             if (!tag) return null;
                             return (
@@ -114,7 +117,7 @@ const GanttView = ({
                           {shiftType === 'sick' && 'Больничный'}
                         </span>
                         <div className="gantt-tags">
-                          {cellTags[key] && cellTags[key].map((tagKey) => {
+                          {cellTagsForDate && cellTagsForDate.map((tagKey) => {
                             const tag = tags[tagKey];
                             if (!tag) return null;
                             return (
@@ -138,7 +141,7 @@ const GanttView = ({
                         onClick={() => onTagClick(empIndex, selectedDay)}
                       >
                         <div className="gantt-tags">
-                          {cellTags[key] && cellTags[key].map((tagKey) => {
+                          {cellTagsForDate && cellTagsForDate.map((tagKey) => {
                             const tag = tags[tagKey];
                             if (!tag) return null;
                             return (
