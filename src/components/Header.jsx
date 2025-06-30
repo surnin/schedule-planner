@@ -1,4 +1,7 @@
 import React from 'react';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faDownload, faCog, faLock, faLockOpen } from '@fortawesome/free-solid-svg-icons';
+import { faTelegram } from '@fortawesome/free-brands-svg-icons';
 import { dayLabels } from '../constants/defaultData';
 
 const Header = ({ 
@@ -68,40 +71,41 @@ const Header = ({
             {bulkEditMode ? 'Выйти из массового режима' : 'Массовое редактирование'}
           </button>
           
-          <div className="publish-group">
+          <div className="header-btn-group">
             <button 
-              className="publish-btn telegram"
+              className="header-btn telegram"
               onClick={onPublish}
               title="Опубликовать в Telegram"
             >
-              📱
+              <FontAwesomeIcon icon={faTelegram} />
             </button>
-            <div className="divider"></div>
+            <div className="btn-divider"></div>
             <button 
-              className="publish-btn download"
+              className="header-btn download"
               onClick={onDownloadPDF}
               title="Скачать PDF"
             >
-              📄
+              <FontAwesomeIcon icon={faDownload} />
             </button>
           </div>
           
           {hasAdmins && (
             <button 
-              className={`lock-btn ${isAuthenticated ? 'unlocked' : 'locked'}`}
+              className={`header-btn lock-btn ${isAuthenticated ? 'unlocked' : 'locked'}`}
               onClick={isAuthenticated ? onLock : onUnlock}
               title={isAuthenticated ? 'Заблокировать редактирование' : 'Разблокировать редактирование'}
             >
-              {isAuthenticated ? '🔓' : '🔒'}
+              <FontAwesomeIcon icon={isAuthenticated ? faLockOpen : faLock} />
             </button>
           )}
           
           <div className={`dropdown ${dropdownOpen ? 'open' : ''}`}>
             <button 
-              className="dropdown-btn"
+              className="header-btn dropdown-btn"
               onClick={onDropdownToggle}
+              title="Настройки и дополнительно"
             >
-              ⚙️
+              <FontAwesomeIcon icon={faCog} />
             </button>
             <div className="dropdown-content">
               <button onClick={() => {

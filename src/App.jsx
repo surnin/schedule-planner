@@ -3,6 +3,14 @@ import './App.css';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
+// FontAwesome setup
+import { library } from '@fortawesome/fontawesome-svg-core';
+import { faTelegram } from '@fortawesome/free-brands-svg-icons';
+import { faDownload, faCog, faLock, faLockOpen } from '@fortawesome/free-solid-svg-icons';
+
+// Add icons to the library
+library.add(faTelegram, faDownload, faCog, faLock, faLockOpen);
+
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useAblyConnection } from './hooks/useAblyConnection';
 import { defaultEmployees, defaultShiftTypes, defaultFilters, initialData, defaultTags, dayLabels } from './constants/defaultData';
