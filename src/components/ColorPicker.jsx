@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { HexColorPicker } from 'react-colorful';
 
-const ColorPicker = ({ value, onChange, label = "Цвет" }) => {
+const ColorPicker = ({ value, onChange }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [showPredefined, setShowPredefined] = useState(true);
   const containerRef = useRef(null);
@@ -41,7 +41,6 @@ const ColorPicker = ({ value, onChange, label = "Цвет" }) => {
 
   return (
     <div className="color-picker" ref={containerRef}>
-      <label className="color-picker-label">{label}</label>
       <div className="color-picker-container">
         <button
           type="button"
@@ -49,7 +48,6 @@ const ColorPicker = ({ value, onChange, label = "Цвет" }) => {
           onClick={() => setIsOpen(!isOpen)}
           style={{ backgroundColor: value || '#e0e0e0' }}
         >
-          <span className="color-picker-value">{value || 'Выбрать'}</span>
         </button>
         
         {isOpen && (
@@ -91,18 +89,6 @@ const ColorPicker = ({ value, onChange, label = "Цвет" }) => {
                   onChange={handlePickerChange}
                 />
                 <div className="color-picker-input-group">
-                  <input
-                    type="text"
-                    value={value || '#e0e0e0'}
-                    onChange={(e) => {
-                      const color = e.target.value;
-                      if (/^#[0-9A-F]{6}$/i.test(color)) {
-                        onChange(color);
-                      }
-                    }}
-                    className="color-hex-input"
-                    placeholder="#ffffff"
-                  />
                   <button 
                     type="button"
                     className="color-apply-btn"

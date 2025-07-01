@@ -5,6 +5,11 @@ export const useAblyConnection = (settings, schedule, cellTags, onScheduleUpdate
   const ablyClient = useRef(null);
   const channel = useRef(null);
   const myClientId = useRef(null);
+  const lastUpdateTimestamps = useRef({
+    schedule: null,
+    settings: null,
+    cellTags: null
+  });
   
   const [connectionState, setConnectionState] = useState('disconnected');
   const [onlineUsers, setOnlineUsers] = useState(new Set());
@@ -31,6 +36,11 @@ export const useAblyConnection = (settings, schedule, cellTags, onScheduleUpdate
 
       ablyClient.current.connection.on('connected', () => {
         setConnectionState('connected');
+        
+        // Запрашиваем существующие данные при подключении
+        setTimeout(() => {
+          requestExistingData();
+        }, 1000); // Задержка для стабилизации подключения
       });
 
       ablyClient.current.connection.on('disconnected', () => {
@@ -47,19 +57,40 @@ export const useAblyConnection = (settings, schedule, cellTags, onScheduleUpdate
 
       channel.current.subscribe('schedule-update', (message) => {
         if (message.data && message.data.schedule && message.data.userId !== myClientId.current) {
-          onScheduleUpdate(message.data.schedule);
+          const messageTimestamp = new Date(message.data.timestamp);
+          const lastTimestamp = lastUpdateTimestamps.current.schedule;
+          
+          // Применяем обновление только если оно новее последнего
+          if (!lastTimestamp || messageTimestamp > lastTimestamp) {
+            lastUpdateTimestamps.current.schedule = messageTimestamp;
+            onScheduleUpdate(message.data.schedule);
+          }
         }
       });
 
       channel.current.subscribe('settings-update', (message) => {
         if (message.data && message.data.settings && message.data.userId !== myClientId.current) {
-          onSettingsUpdate(message.data.settings);
+          const messageTimestamp = new Date(message.data.timestamp);
+          const lastTimestamp = lastUpdateTimestamps.current.settings;
+          
+          // Применяем обновление только если оно новее последнего
+          if (!lastTimestamp || messageTimestamp > lastTimestamp) {
+            lastUpdateTimestamps.current.settings = messageTimestamp;
+            onSettingsUpdate(message.data.settings);
+          }
         }
       });
 
       channel.current.subscribe('celltags-update', (message) => {
         if (message.data && message.data.cellTags && message.data.userId !== myClientId.current) {
-          onCellTagsUpdate(message.data.cellTags);
+          const messageTimestamp = new Date(message.data.timestamp);
+          const lastTimestamp = lastUpdateTimestamps.current.cellTags;
+          
+          // Применяем обновление только если оно новее последнего
+          if (!lastTimestamp || messageTimestamp > lastTimestamp) {
+            lastUpdateTimestamps.current.cellTags = messageTimestamp;
+            onCellTagsUpdate(message.data.cellTags);
+          }
         }
       });
 
@@ -71,6 +102,21 @@ export const useAblyConnection = (settings, schedule, cellTags, onScheduleUpdate
 
       channel.current.subscribe('test-message', (message) => {
         // Test message received
+      });
+
+      // Слушаем запросы данных от новых пользователей
+      channel.current.subscribe('data-request', (message) => {
+        if (message.data && message.data.userId !== myClientId.current) {
+          // Отправляем текущие данные запросившему пользователю
+          sendDataResponse();
+        }
+      });
+
+      // Слушаем ответы с данными
+      channel.current.subscribe('data-response', (message) => {
+        if (message.data && message.data.userId !== myClientId.current) {
+          handleDataResponse(message.data);
+        }
       });
 
       channel.current.subscribe('push-notification', (message) => {
@@ -136,11 +182,15 @@ export const useAblyConnection = (settings, schedule, cellTags, onScheduleUpdate
 
   const publishScheduleUpdate = (newSchedule) => {
     if (channel.current && connectionState === 'connected' && channel.current.state === 'attached') {
+      const timestamp = new Date();
       const message = {
         schedule: newSchedule,
-        timestamp: new Date().toISOString(),
+        timestamp: timestamp.toISOString(),
         userId: myClientId.current
       };
+      
+      // Обновляем локальную временную метку
+      lastUpdateTimestamps.current.schedule = timestamp;
       
       channel.current.publish('schedule-update', message).catch(() => {
         // Handle publish error silently
@@ -150,26 +200,38 @@ export const useAblyConnection = (settings, schedule, cellTags, onScheduleUpdate
 
   const publishSettingsUpdate = (newSettings) => {
     if (channel.current && connectionState === 'connected' && channel.current.state === 'attached') {
+      const timestamp = new Date();
       const message = {
         settings: {
           employees: newSettings.employees,
+          positions: newSettings.positions,
           shiftTypes: newSettings.shiftTypes,
-          tags: newSettings.tags
+          tags: newSettings.tags,
+          workingHours: newSettings.workingHours
         },
-        timestamp: new Date().toISOString(),
+        timestamp: timestamp.toISOString(),
         userId: myClientId.current
       };
+      
+      // Обновляем локальную временную метку
+      lastUpdateTimestamps.current.settings = timestamp;
+      
       channel.current.publish('settings-update', message);
     }
   };
 
   const publishCellTagsUpdate = (newCellTags) => {
     if (channel.current && connectionState === 'connected' && channel.current.state === 'attached') {
+      const timestamp = new Date();
       const message = {
         cellTags: newCellTags,
-        timestamp: new Date().toISOString(),
+        timestamp: timestamp.toISOString(),
         userId: myClientId.current
       };
+      
+      // Обновляем локальную временную метку
+      lastUpdateTimestamps.current.cellTags = timestamp;
+      
       channel.current.publish('celltags-update', message);
     }
   };
@@ -197,24 +259,108 @@ export const useAblyConnection = (settings, schedule, cellTags, onScheduleUpdate
     }
   };
 
+  const requestExistingData = () => {
+    if (channel.current && connectionState === 'connected' && channel.current.state === 'attached') {
+      const requestData = {
+        type: 'request',
+        timestamp: new Date().toISOString(),
+        userId: myClientId.current
+      };
+      channel.current.publish('data-request', requestData);
+    }
+  };
+
+  const sendDataResponse = () => {
+    if (channel.current && connectionState === 'connected' && channel.current.state === 'attached') {
+      const responseData = {
+        type: 'response',
+        timestamp: new Date().toISOString(),
+        userId: myClientId.current,
+        data: {
+          settings: settings,
+          schedule: schedule,
+          cellTags: cellTags
+        }
+      };
+      channel.current.publish('data-response', responseData);
+    }
+  };
+
+  const handleDataResponse = (responseData) => {
+    if (responseData && responseData.data) {
+      const { settings: receivedSettings, schedule: receivedSchedule, cellTags: receivedCellTags } = responseData.data;
+      
+      // Проверяем, есть ли у нас локальные данные (не дефолтные)
+      const hasLocalSchedule = Object.keys(schedule).length > 0;
+      const hasLocalTags = Object.keys(cellTags).length > 0;
+      
+      // Проверяем, изменились ли настройки от дефолтных
+      const hasLocalSettings = settings.employees && (
+        // Есть сотрудники с должностями (новая структура)
+        settings.employees.some(emp => typeof emp === 'object' && emp.position) ||
+        // Или есть пользовательские типы смен
+        Object.keys(settings.shiftTypes || {}).length > 8 ||
+        // Или есть пользовательские теги
+        Object.keys(settings.tags || {}).length > 3 ||
+        // Или есть пользовательские должности
+        (settings.positions && settings.positions.length > 0)
+      );
+      
+      // Определяем, есть ли у нас значимые локальные данные
+      const hasLocalData = hasLocalSettings || hasLocalSchedule || hasLocalTags;
+      
+      // Если у нас нет значимых локальных данных, применяем полученные
+      if (!hasLocalData && receivedSettings) {
+        onSettingsUpdate(receivedSettings);
+      }
+      
+      if (!hasLocalData && receivedSchedule && Object.keys(receivedSchedule).length > 0) {
+        onScheduleUpdate(receivedSchedule);
+      }
+      
+      if (!hasLocalData && receivedCellTags && Object.keys(receivedCellTags).length > 0) {
+        onCellTagsUpdate(receivedCellTags);
+      }
+    }
+  };
+
   useEffect(() => {
-    disconnectFromAbly();
+    // Только отключаемся и переподключаемся если изменились критичные настройки
+    const shouldConnect = settings.websocket.enabled && 
+                          settings.websocket.apiKey.trim() && 
+                          settings.websocket.roomId.trim();
     
-    if (settings.websocket.enabled && 
-        settings.websocket.apiKey.trim() && 
-        settings.websocket.roomId.trim()) {
+    const currentApiKey = ablyClient.current?.options?.key;
+    const currentRoomId = channel.current?.name;
+    
+    // Проверяем, нужно ли пересоздавать подключение
+    const needsReconnect = shouldConnect && (
+      !ablyClient.current || 
+      currentApiKey !== settings.websocket.apiKey ||
+      currentRoomId !== settings.websocket.roomId.trim() ||
+      connectionState === 'failed'
+    );
+    
+    if (!shouldConnect && (ablyClient.current || channel.current)) {
+      // Отключаемся если websocket выключен
+      disconnectFromAbly();
+    } else if (needsReconnect) {
+      // Пересоздаем подключение только при необходимости
+      disconnectFromAbly();
       const timer = setTimeout(() => {
         connectToAbly();
       }, 100);
       
       return () => {
         clearTimeout(timer);
-        disconnectFromAbly();
       };
     }
     
     return () => {
-      disconnectFromAbly();
+      // Cleanup при размонтировании компонента
+      if (!shouldConnect) {
+        disconnectFromAbly();
+      }
     };
   }, [settings.websocket.enabled, settings.websocket.apiKey, settings.websocket.roomId]);
 
@@ -238,6 +384,7 @@ export const useAblyConnection = (settings, schedule, cellTags, onScheduleUpdate
     publishCellTagsUpdate,
     publishAuthStateUpdate,
     sendTestMessage,
-    sendPushNotification
+    sendPushNotification,
+    requestExistingData
   };
 };

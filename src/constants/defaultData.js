@@ -1,6 +1,19 @@
+export const defaultPositions = [
+  'Администратор', 'Мастер', 'Стажер', 'Консультант', 'Менеджер'
+];
+
 export const defaultEmployees = [
-  'Ильвина', 'Инесса', 'Альбина', 'Анастасия', 'Арина',
-  'Ксения', 'Света', 'Елена', 'Леся', 'Алия', 'Даша'
+  { name: 'Ильвина', position: 'Администратор' },
+  { name: 'Инесса', position: 'Мастер' },
+  { name: 'Альбина', position: 'Мастер' },
+  { name: 'Анастасия', position: 'Консультант' },
+  { name: 'Арина', position: 'Стажер' },
+  { name: 'Ксения', position: 'Мастер' },
+  { name: 'Света', position: 'Консультант' },
+  { name: 'Елена', position: 'Администратор' },
+  { name: 'Леся', position: 'Мастер' },
+  { name: 'Алия', position: 'Менеджер' },
+  { name: 'Даша', position: 'Стажер' }
 ];
 
 export const defaultShiftTypes = {

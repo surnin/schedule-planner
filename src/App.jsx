@@ -13,7 +13,7 @@ library.add(faTelegram, faDownload, faCog, faLock, faLockOpen, faChevronLeft, fa
 
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useAblyConnection } from './hooks/useAblyConnection';
-import { defaultEmployees, defaultShiftTypes, initialData, defaultTags, defaultWorkingHours } from './constants/defaultData';
+import { defaultEmployees, defaultShiftTypes, initialData, defaultTags, defaultWorkingHours, defaultPositions } from './constants/defaultData';
 import { injectShiftStyles } from './utils/styleUtils';
 
 import Header from './components/Header';
@@ -29,6 +29,7 @@ import CalendarNavigation from './components/CalendarNavigation';
 function App() {
   const [settings, setSettings] = useLocalStorage('schedule-planner-settings', {
     employees: defaultEmployees,
+    positions: defaultPositions,
     shiftTypes: defaultShiftTypes,
     tags: defaultTags,
     workingHours: defaultWorkingHours,
@@ -53,8 +54,9 @@ function App() {
     settings.employees.forEach((emp, empIndex) => {
       for (let day = 0; day < 14; day++) {
         const key = `${empIndex}-${day}`;
-        if (initialData[emp] && day < initialData[emp].length) {
-          initial[key] = initialData[emp][day];
+        const empName = typeof emp === 'string' ? emp : emp.name;
+        if (initialData[empName] && day < initialData[empName].length) {
+          initial[key] = initialData[empName][day];
         }
       }
     });
@@ -94,6 +96,7 @@ function App() {
   const [authModal, setAuthModal] = useState(false);
   const [flexibleTimeModal, setFlexibleTimeModal] = useState({ open: false, empIndex: null, dayIndex: null });
   const [flexibleShifts, setFlexibleShifts] = useLocalStorage('schedule-planner-flexible-shifts', {});
+  const [selectedPosition, setSelectedPosition] = useLocalStorage('schedule-planner-position-filter', 'all');
 
   const handleScheduleUpdate = (newSchedule) => {
     setSchedule(newSchedule);
@@ -104,6 +107,7 @@ function App() {
       const updatedSettings = {
         ...prev,
         employees: newSettings.employees !== undefined ? newSettings.employees : prev.employees,
+        positions: newSettings.positions !== undefined ? newSettings.positions : prev.positions,
         shiftTypes: newSettings.shiftTypes !== undefined ? newSettings.shiftTypes : prev.shiftTypes,
         tags: newSettings.tags !== undefined ? newSettings.tags : prev.tags,
         admins: newSettings.admins !== undefined ? newSettings.admins : (prev.admins || []),
@@ -239,24 +243,55 @@ function App() {
     }
   };
 
-  const getDateKey = (empIndex, dayIndex) => {
-    const dateStr = getDateFromIndex(dayIndex);
-    return `${empIndex}-${dateStr}`;
+  // Функция для получения уникального идентификатора сотрудника
+  const getEmployeeId = (empIndex) => {
+    const employee = settings.employees[empIndex];
+    if (!employee) return `emp-${empIndex}`;
+    
+    // Используем имя как уникальный идентификатор
+    const empName = typeof employee === 'string' ? employee : employee.name;
+    return empName;
   };
 
-  // Функция для получения расписания по дате
-  const getScheduleByDate = (empIndex, dayIndex) => {
-    const dateKey = getDateKey(empIndex, dayIndex);
+  // Внутренняя функция для создания ключа даты
+  const getDateKeyInternal = (empIndex, dayIndex) => {
+    const dateStr = getDateFromIndex(dayIndex);
+    const employeeId = getEmployeeId(empIndex);
+    return `${employeeId}-${dateStr}`;
+  };
+
+  // Функция для компонентов с отфильтрованными индексами
+  const getDateKey = (filteredEmpIndex, dayIndex) => {
+    const empIndex = getFullEmployeeIndex(filteredEmpIndex);
+    return getDateKeyInternal(empIndex, dayIndex);
+  };
+
+  // Функция для получения расписания по дате (внутренняя)
+  const getScheduleByDateInternal = (empIndex, dayIndex) => {
+    const dateKey = getDateKeyInternal(empIndex, dayIndex);
     return schedule[dateKey];
+  };
+
+  // Функция для получения расписания по дате (для компонентов с отфильтрованными индексами)
+  const getScheduleByDate = (filteredEmpIndex, dayIndex) => {
+    const empIndex = getFullEmployeeIndex(filteredEmpIndex);
+    return getScheduleByDateInternal(empIndex, dayIndex);
   };
 
   // Функция для установки расписания по дате
   const setScheduleByDate = (empIndex, dayIndex, shiftType) => {
-    const dateKey = getDateKey(empIndex, dayIndex);
+    const dateKey = getDateKeyInternal(empIndex, dayIndex);
     setSchedule(prev => {
       const newSchedule = { ...prev };
       if (shiftType === 'clear' || !shiftType) {
         delete newSchedule[dateKey];
+        // Также очищаем теги для этой ячейки
+        setCellTags(prevTags => {
+          const newTags = { ...prevTags };
+          delete newTags[dateKey];
+          publishCellTagsUpdate(newTags);
+          return newTags;
+        });
       } else {
         newSchedule[dateKey] = shiftType;
       }
@@ -265,14 +300,20 @@ function App() {
     });
   };
 
-  // Функции для работы с тегами по датам
-  const getCellTagsByDate = (empIndex, dayIndex) => {
-    const dateKey = getDateKey(empIndex, dayIndex);
+  // Функции для работы с тегами по датам (внутренняя)
+  const getCellTagsByDateInternal = (empIndex, dayIndex) => {
+    const dateKey = getDateKeyInternal(empIndex, dayIndex);
     return cellTags[dateKey] || [];
   };
 
+  // Функции для работы с тегами по датам (для компонентов с отфильтрованными индексами)
+  const getCellTagsByDate = (filteredEmpIndex, dayIndex) => {
+    const empIndex = getFullEmployeeIndex(filteredEmpIndex);
+    return getCellTagsByDateInternal(empIndex, dayIndex);
+  };
+
   const setCellTagsByDate = (empIndex, dayIndex, tags) => {
-    const dateKey = getDateKey(empIndex, dayIndex);
+    const dateKey = getDateKeyInternal(empIndex, dayIndex);
     setCellTags(prev => {
       const newCellTags = { ...prev };
       if (!tags || tags.length === 0) {
@@ -282,6 +323,35 @@ function App() {
       }
       publishCellTagsUpdate(newCellTags);
       return newCellTags;
+    });
+  };
+
+  // Функция для фильтрации сотрудников по должности
+  const getFilteredEmployees = () => {
+    if (selectedPosition === 'all') {
+      return settings.employees;
+    }
+    return settings.employees.filter(emp => {
+      const empPosition = typeof emp === 'string' ? '' : emp.position;
+      return empPosition === selectedPosition;
+    });
+  };
+
+  // Функция для получения индекса в полном списке по индексу в отфильтрованном
+  const getFullEmployeeIndex = (filteredIndex) => {
+    if (selectedPosition === 'all') {
+      return filteredIndex;
+    }
+    
+    const filteredEmployees = getFilteredEmployees();
+    const targetEmployee = filteredEmployees[filteredIndex];
+    if (!targetEmployee) return filteredIndex;
+    
+    const targetName = typeof targetEmployee === 'string' ? targetEmployee : targetEmployee.name;
+    
+    return settings.employees.findIndex(emp => {
+      const empName = typeof emp === 'string' ? emp : emp.name;
+      return empName === targetName;
     });
   };
 
@@ -303,9 +373,22 @@ function App() {
     };
   }, [dropdownOpen]);
 
-  const handleEmployeeChange = (index, value) => {
+  const handleEmployeeChange = (index, field, value) => {
     const newEmployees = [...settings.employees];
-    newEmployees[index] = value;
+    if (field === 'name') {
+      const currentEmployee = typeof newEmployees[index] === 'string' 
+        ? { name: newEmployees[index], position: '' }
+        : newEmployees[index];
+      newEmployees[index] = { ...currentEmployee, name: value };
+    } else if (field === 'position') {
+      const currentEmployee = typeof newEmployees[index] === 'string' 
+        ? { name: newEmployees[index], position: '' }
+        : newEmployees[index];
+      newEmployees[index] = { ...currentEmployee, position: value };
+    } else {
+      // Обратная совместимость для старого формата
+      newEmployees[index] = value;
+    }
     const newSettings = { ...settings, employees: newEmployees };
     setSettings(newSettings);
     publishSettingsUpdate(newSettings);
@@ -321,7 +404,31 @@ function App() {
   const handleAddEmployee = () => {
     const newSettings = { 
       ...settings, 
-      employees: [...settings.employees, 'Новый сотрудник'] 
+      employees: [...settings.employees, { name: 'Новый сотрудник', position: '' }] 
+    };
+    setSettings(newSettings);
+    publishSettingsUpdate(newSettings);
+  };
+
+  const handlePositionChange = (index, value) => {
+    const newPositions = [...settings.positions];
+    newPositions[index] = value;
+    const newSettings = { ...settings, positions: newPositions };
+    setSettings(newSettings);
+    publishSettingsUpdate(newSettings);
+  };
+
+  const handleRemovePosition = (index) => {
+    const newPositions = settings.positions.filter((_, i) => i !== index);
+    const newSettings = { ...settings, positions: newPositions };
+    setSettings(newSettings);
+    publishSettingsUpdate(newSettings);
+  };
+
+  const handleAddPosition = () => {
+    const newSettings = { 
+      ...settings, 
+      positions: [...(settings.positions || []), 'Новая должность'] 
     };
     setSettings(newSettings);
     publishSettingsUpdate(newSettings);
@@ -404,6 +511,19 @@ function App() {
         publishScheduleUpdate(newSchedule);
         return newSchedule;
       });
+      
+      // Также очищаем теги для выделенных ячеек при очистке
+      if (shiftType === 'clear') {
+        setCellTags(prevTags => {
+          const newTags = { ...prevTags };
+          selectedCells.forEach(cellKey => {
+            delete newTags[cellKey];
+          });
+          publishCellTagsUpdate(newTags);
+          return newTags;
+        });
+      }
+      
       setSelectedCells(new Set());
     } else {
       if (popup.empIndex === null || popup.dayIndex === null) return;
@@ -450,20 +570,24 @@ function App() {
     setFlexibleTimeModal({ open: false, empIndex: null, dayIndex: null });
   };
 
-  const getFlexibleShiftData = (empIndex, dayIndex) => {
+  const getFlexibleShiftData = (filteredEmpIndex, dayIndex) => {
+    const empIndex = getFullEmployeeIndex(filteredEmpIndex);
     const flexibleKey = `${empIndex}-${dayIndex}`;
     return flexibleShifts[flexibleKey];
   };
 
-  const handleCellClick = (empIndex, dayIndex) => {
+  const handleCellClick = (filteredEmpIndex, dayIndex) => {
     // Проверяем авторизацию
     if (!checkAuthentication()) {
       alert('Редактирование заблокировано. Войдите как администратор для редактирования расписания.');
       return;
     }
 
+    // Преобразуем отфильтрованный индекс в полный индекс
+    const empIndex = getFullEmployeeIndex(filteredEmpIndex);
+
     if (bulkEditMode) {
-      const dateKey = getDateKey(empIndex, dayIndex);
+      const dateKey = getDateKeyInternal(empIndex, dayIndex);
       setSelectedCells(prev => {
         const newSet = new Set(prev);
         if (newSet.has(dateKey)) {
@@ -474,7 +598,7 @@ function App() {
         return newSet;
       });
     } else {
-      const currentTags = getCellTagsByDate(empIndex, dayIndex);
+      const currentTags = getCellTagsByDateInternal(empIndex, dayIndex);
       setPopup({ open: true, empIndex, dayIndex, selectedTags: currentTags });
     }
   };
@@ -1149,15 +1273,18 @@ function App() {
           viewPeriod={viewPeriod}
           onStartDateChange={setCurrentStartDate}
           dynamicDayLabels={dynamicDayLabels}
+          positions={settings.positions}
+          selectedPosition={selectedPosition}
+          onPositionChange={setSelectedPosition}
         />
         
-        <Legend 
+{/* <Legend 
           shiftTypes={settings.shiftTypes}
-        />
+        /> */}
 
         {currentView === 'grid' && (
           <GridView 
-            employees={settings.employees}
+            employees={getFilteredEmployees()}
             schedule={schedule}
             shiftTypes={settings.shiftTypes}
             selectedCells={selectedCells}
@@ -1176,7 +1303,8 @@ function App() {
             getDayType={getDayType}
             cellViewSettings={settings.cellView}
             getFlexibleShiftData={getFlexibleShiftData}
-            onFlexibleTimeUpdate={(empIndex, dayIndex, timeData) => {
+            onFlexibleTimeUpdate={(filteredEmpIndex, dayIndex, timeData) => {
+              const empIndex = getFullEmployeeIndex(filteredEmpIndex);
               const flexibleKey = `${empIndex}-${dayIndex}`;
               setFlexibleShifts(prev => ({
                 ...prev,
@@ -1193,7 +1321,7 @@ function App() {
 
         {currentView === 'timeline' && selectedDay !== null && (
           <TimelineView 
-            employees={settings.employees}
+            employees={getFilteredEmployees()}
             schedule={schedule}
             shiftTypes={settings.shiftTypes}
             selectedDay={selectedDay}
@@ -1207,7 +1335,8 @@ function App() {
             onTagClick={handleTagClick}
             shouldShowEmployee={shouldShowEmployee}
             getFlexibleShiftData={getFlexibleShiftData}
-            onFlexibleShiftUpdate={(empIndex, dayIndex, timeData) => {
+            onFlexibleShiftUpdate={(filteredEmpIndex, dayIndex, timeData) => {
+              const empIndex = getFullEmployeeIndex(filteredEmpIndex);
               const flexibleKey = `${empIndex}-${dayIndex}`;
               setFlexibleShifts(prev => ({
                 ...prev,
@@ -1249,6 +1378,9 @@ function App() {
           onEmployeeChange={handleEmployeeChange}
           onRemoveEmployee={handleRemoveEmployee}
           onAddEmployee={handleAddEmployee}
+          onPositionChange={handlePositionChange}
+          onRemovePosition={handleRemovePosition}
+          onAddPosition={handleAddPosition}
           onShiftTypeChange={handleShiftTypeChange}
           onRemoveShiftType={handleRemoveShiftType}
           onAddShiftType={handleAddShiftType}

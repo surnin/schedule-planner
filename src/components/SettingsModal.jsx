@@ -10,6 +10,9 @@ const SettingsModal = ({
   onEmployeeChange,
   onRemoveEmployee,
   onAddEmployee,
+  onPositionChange,
+  onRemovePosition,
+  onAddPosition,
   onShiftTypeChange,
   onRemoveShiftType,
   onAddShiftType,
@@ -40,6 +43,12 @@ const SettingsModal = ({
             onClick={() => setActiveTab('employees')}
           >
             Сотрудники
+          </button>
+          <button 
+            className={`tab-btn ${activeTab === 'positions' ? 'active' : ''}`}
+            onClick={() => setActiveTab('positions')}
+          >
+            Должности
           </button>
           <button 
             className={`tab-btn ${activeTab === 'shifts' ? 'active' : ''}`}
@@ -90,16 +99,66 @@ const SettingsModal = ({
                 + Добавить сотрудника
               </button>
               <div className="employees-list">
-                {settings.employees.map((employee, index) => (
-                  <div key={index} className="employee-item">
+                {settings.employees.map((employee, index) => {
+                  const empName = typeof employee === 'string' ? employee : employee.name;
+                  const empPosition = typeof employee === 'string' ? '' : employee.position;
+                  
+                  return (
+                    <div key={index} className="employee-item">
+                      <div className="employee-inputs">
+                        <input 
+                          type="text" 
+                          placeholder="Имя сотрудника"
+                          value={empName}
+                          onChange={(e) => onEmployeeChange(index, 'name', e.target.value)}
+                        />
+                        <select 
+                          value={empPosition}
+                          onChange={(e) => onEmployeeChange(index, 'position', e.target.value)}
+                          className="position-select-modal"
+                        >
+                          <option value="">Выберите должность</option>
+                          {settings.positions?.map(position => (
+                            <option key={position} value={position}>
+                              {position}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <button 
+                        className="remove-btn"
+                        onClick={() => onRemoveEmployee(index)}
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'positions' && (
+            <div className="settings-section">
+              <h3>Должности</h3>
+              <button 
+                className="add-btn"
+                onClick={onAddPosition}
+              >
+                + Добавить должность
+              </button>
+              <div className="positions-list">
+                {settings.positions?.map((position, index) => (
+                  <div key={index} className="position-item">
                     <input 
                       type="text" 
-                      value={employee}
-                      onChange={(e) => onEmployeeChange(index, e.target.value)}
+                      value={position}
+                      onChange={(e) => onPositionChange(index, e.target.value)}
+                      placeholder="Название должности"
                     />
                     <button 
                       className="remove-btn"
-                      onClick={() => onRemoveEmployee(index)}
+                      onClick={() => onRemovePosition(index)}
                     >
                       🗑️
                     </button>

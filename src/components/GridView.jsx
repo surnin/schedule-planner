@@ -116,7 +116,7 @@ const GridView = ({
   const handleCellMouseDown = (e, empIndex, dayIndex) => {
     if (!bulkEditMode) return;
     
-    e.preventDefault();
+    // Сохраняем информацию о начале возможного протягивания
     const cellKey = getDateKey(empIndex, dayIndex);
     
     setDragSelect({
@@ -149,11 +149,34 @@ const GridView = ({
     }));
   };
 
-  const handleCellMouseUp = () => {
+  const handleCellMouseUp = (e) => {
     if (dragSelect.isDragging) {
-      // Применяем выделение
-      selectedCells.clear();
-      dragSelect.dragSelection.forEach(cellKey => selectedCells.add(cellKey));
+      // Для протягивания обновляем selectedCells через callback
+      if (dragSelect.dragSelection.size > 1) {
+        // Только для множественного выделения (протягивание)
+        const newSelectedCells = new Set(selectedCells);
+        
+        if (e.ctrlKey || e.metaKey) {
+          // С Ctrl/Cmd инвертируем выделение (toggle)
+          dragSelect.dragSelection.forEach(cellKey => {
+            if (newSelectedCells.has(cellKey)) {
+              newSelectedCells.delete(cellKey);
+            } else {
+              newSelectedCells.add(cellKey);
+            }
+          });
+        } else {
+          // Без Ctrl просто добавляем к существующему выделению
+          dragSelect.dragSelection.forEach(cellKey => {
+            newSelectedCells.add(cellKey);
+          });
+        }
+        
+        // Обновляем состояние через родительский компонент
+        selectedCells.clear();
+        newSelectedCells.forEach(cellKey => selectedCells.add(cellKey));
+      }
+      // Для одиночного клика оставляем обработку в handleCellClick
       
       setDragSelect({
         isDragging: false,
@@ -189,7 +212,7 @@ const GridView = ({
           
           return (
             <div className="grid-row" key={empIndex}>
-              <div className="employee-name">{employee}</div>
+              <div className="employee-name">{typeof employee === 'string' ? employee : employee.name}</div>
               {Array.from({ length: viewPeriod }, (_, dayIndex) => {
                 const dateKey = getDateKey(empIndex, dayIndex);
                 const shiftType = getScheduleByDate(empIndex, dayIndex);
@@ -206,7 +229,7 @@ const GridView = ({
                     onContextMenu={onCellRightClick}
                     onMouseDown={(e) => handleCellMouseDown(e, empIndex, dayIndex)}
                     onMouseEnter={() => handleCellMouseEnter(empIndex, dayIndex)}
-                    onMouseUp={handleCellMouseUp}
+                    onMouseUp={(e) => handleCellMouseUp(e)}
                   >
                     {shiftType && (
                       <div 

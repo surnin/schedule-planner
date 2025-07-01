@@ -304,15 +304,29 @@ const TimelineView = ({
 
   return (
     <div className="timeline-view">
-      <DateSelector 
-        selectedDay={selectedDay}
-        onDaySelect={onDaySelect}
-        dayLabels={dayLabels}
-      />
-      
       <div className="timeline-container">
         <div className="time-scale">
-          <div className="time-scale-header">Время</div>
+          <div className="time-scale-header">
+            <div className="time-scale-label">Время</div>
+            <div className="date-header-row">
+              {dayLabels.map((label, index) => {
+                const dayOfWeek = (index % 7);
+                const isWeekend = dayOfWeek === 5 || dayOfWeek === 6;
+                
+                return (
+                  <div
+                    key={index}
+                    className={`date-header ${selectedDay === index ? 'active' : ''} ${
+                      isWeekend ? 'weekend' : ''
+                    }`}
+                    onClick={() => onDaySelect(index)}
+                  >
+                    {label}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
           <div className="time-hours">
             {timeScale.map((timePoint, index) => (
               <div key={index} className="time-hour">
@@ -334,7 +348,7 @@ const TimelineView = ({
               
               return (
                 <div key={empIndex} className="timeline-row">
-                  <div className="timeline-employee-name">{employee}</div>
+                  <div className="timeline-employee-name">{typeof employee === 'string' ? employee : employee.name}</div>
                   <div className="timeline-timeline" ref={timelineRef}>
                     {timeScale.map((timePoint, index) => (
                       <div key={index} className="timeline-hour-cell"></div>
