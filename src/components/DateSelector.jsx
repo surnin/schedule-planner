@@ -3,7 +3,9 @@ import React from 'react';
 const DateSelector = ({ selectedDay, onDaySelect, dayLabels }) => {
   return (
     <div className="date-selector">
-      <div className="date-selector-header">Выберите дату:</div>
+      <div className="date-selector-header">
+        <span>Выберите дату:</span>
+      </div>
       <div className="date-header-row">
         {dayLabels.map((label, index) => {
           const dayOfWeek = (index % 7);

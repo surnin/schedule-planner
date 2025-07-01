@@ -2,13 +2,13 @@ import React from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faDownload, faCog, faLock, faLockOpen } from '@fortawesome/free-solid-svg-icons';
 import { faTelegram } from '@fortawesome/free-brands-svg-icons';
-import { dayLabels } from '../constants/defaultData';
 
 const Header = ({ 
   currentView, 
   selectedDay, 
   bulkEditMode,
   dropdownOpen,
+  dayLabels,
   onViewSwitch,
   onBulkEditToggle,
   onSettingsOpen,
@@ -55,10 +55,10 @@ const Header = ({
           </button>
           {selectedDay !== null && (
             <button 
-              className={`view-btn ${currentView === 'gantt' ? 'active' : ''}`}
-              onClick={() => onViewSwitch('gantt')}
+              className={`view-btn ${currentView === 'timeline' ? 'active' : ''}`}
+              onClick={() => onViewSwitch('timeline')}
             >
-              Ганта ({getDayLabel(selectedDay)})
+              Таймлайн ({getDayLabel(selectedDay)})
             </button>
           )}
         </div>

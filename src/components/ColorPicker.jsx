@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { HexColorPicker } from 'react-colorful';
 
 const ColorPicker = ({ value, onChange, label = "Цвет" }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [showPredefined, setShowPredefined] = useState(true);
   const containerRef = useRef(null);
 
   useEffect(() => {
@@ -33,6 +35,10 @@ const ColorPicker = ({ value, onChange, label = "Цвет" }) => {
     setIsOpen(false);
   };
 
+  const handlePickerChange = (color) => {
+    onChange(color);
+  };
+
   return (
     <div className="color-picker" ref={containerRef}>
       <label className="color-picker-label">{label}</label>
@@ -48,27 +54,65 @@ const ColorPicker = ({ value, onChange, label = "Цвет" }) => {
         
         {isOpen && (
           <div className="color-picker-dropdown">
-            <div className="color-picker-colors">
-              {predefinedColors.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  className={`color-option ${value === color ? 'selected' : ''}`}
-                  style={{ backgroundColor: color }}
-                  onClick={() => handleColorSelect(color)}
-                  title={color}
+            <div className="color-picker-tabs">
+              <button 
+                type="button"
+                className={`color-tab ${showPredefined ? 'active' : ''}`}
+                onClick={() => setShowPredefined(true)}
+              >
+                Готовые
+              </button>
+              <button 
+                type="button"
+                className={`color-tab ${!showPredefined ? 'active' : ''}`}
+                onClick={() => setShowPredefined(false)}
+              >
+                Палитра
+              </button>
+            </div>
+            
+            {showPredefined ? (
+              <div className="color-picker-colors">
+                {predefinedColors.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    className={`color-option ${value === color ? 'selected' : ''}`}
+                    style={{ backgroundColor: color }}
+                    onClick={() => handleColorSelect(color)}
+                    title={color}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="color-picker-palette">
+                <HexColorPicker 
+                  color={value || '#e0e0e0'} 
+                  onChange={handlePickerChange}
                 />
-              ))}
-            </div>
-            <div className="color-picker-custom">
-              <input
-                type="color"
-                value={value || '#e0e0e0'}
-                onChange={(e) => handleColorSelect(e.target.value)}
-                className="color-picker-input"
-              />
-              <span>Свой цвет</span>
-            </div>
+                <div className="color-picker-input-group">
+                  <input
+                    type="text"
+                    value={value || '#e0e0e0'}
+                    onChange={(e) => {
+                      const color = e.target.value;
+                      if (/^#[0-9A-F]{6}$/i.test(color)) {
+                        onChange(color);
+                      }
+                    }}
+                    className="color-hex-input"
+                    placeholder="#ffffff"
+                  />
+                  <button 
+                    type="button"
+                    className="color-apply-btn"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    ОК
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

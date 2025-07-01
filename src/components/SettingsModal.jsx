@@ -54,10 +54,10 @@ const SettingsModal = ({
             Теги
           </button>
           <button 
-            className={`tab-btn ${activeTab === 'telegram' ? 'active' : ''}`}
-            onClick={() => setActiveTab('telegram')}
+            className={`tab-btn ${activeTab === 'cellview' ? 'active' : ''}`}
+            onClick={() => setActiveTab('cellview')}
           >
-            Telegram
+            Вид ячейки
           </button>
           <button 
             className={`tab-btn ${activeTab === 'admins' ? 'active' : ''}`}
@@ -112,6 +112,42 @@ const SettingsModal = ({
           {activeTab === 'shifts' && (
             <div className="settings-section">
               <h3>Типы смен</h3>
+              
+              <div className="working-hours-section">
+                <h4>Рабочие часы</h4>
+                <p className="working-hours-description">
+                  Глобальная настройка определяет диапазон времени, отображаемый в таймлайне. 
+                  Типы смен могут использовать только время в пределах этого диапазона.
+                </p>
+                <div className="working-hours-inputs">
+                  <div className="time-range">
+                    <label>От:</label>
+                    <TimeSelect 
+                      value={{ hours: settings.workingHours?.start || 8, minutes: settings.workingHours?.startMinutes || 0 }}
+                      onChange={(time) => onSettingsChange('workingHours', { 
+                        ...settings.workingHours, 
+                        start: time.hours, 
+                        startMinutes: time.minutes || 0 
+                      })}
+                    />
+                  </div>
+                  <div className="time-range">
+                    <label>До:</label>
+                    <TimeSelect 
+                      value={{ hours: settings.workingHours?.end || 22, minutes: settings.workingHours?.endMinutes || 0 }}
+                      onChange={(time) => onSettingsChange('workingHours', { 
+                        ...settings.workingHours, 
+                        end: time.hours, 
+                        endMinutes: time.minutes || 0 
+                      })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+
+              <div className="settings-divider"></div>
+
               <button 
                 className="add-btn"
                 onClick={onAddShiftType}
@@ -146,16 +182,14 @@ const SettingsModal = ({
                             value={{ hours: shiftType.start, minutes: shiftType.startMinutes || 0 }}
                             placeholder="Начало"
                             onChange={(time) => {
-                              onShiftTypeChange(key, 'start', time.hours);
-                              onShiftTypeChange(key, 'startMinutes', time.minutes);
+                              onShiftTypeChange(key, 'startTime', time);
                             }}
                           />
                           <TimeSelect
                             value={{ hours: shiftType.end, minutes: shiftType.endMinutes || 0 }}
                             placeholder="Конец"
                             onChange={(time) => {
-                              onShiftTypeChange(key, 'end', time.hours);
-                              onShiftTypeChange(key, 'endMinutes', time.minutes);
+                              onShiftTypeChange(key, 'endTime', time);
                             }}
                           />
                         </>
@@ -218,60 +252,6 @@ const SettingsModal = ({
             </div>
           )}
 
-          {activeTab === 'telegram' && (
-            <div className="settings-section">
-              <h3>Telegram Bot</h3>
-              <div className="telegram-settings">
-                <div className="telegram-info">
-                  <p><strong>📋 Инструкция по настройке:</strong></p>
-                  <ol>
-                    <li>Создайте бота через <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer">@BotFather</a></li>
-                    <li>Получите токен бота</li>
-                    <li>Добавьте бота в чат или найдите Chat ID через <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer">@userinfobot</a></li>
-                    <li>Введите данные ниже и включите уведомления</li>
-                  </ol>
-                </div>
-                
-                <label>
-                  <input 
-                    type="checkbox"
-                    checked={settings.telegram?.enabled || false}
-                    onChange={(e) => onSettingsChange('telegram.enabled', e.target.checked)}
-                  />
-                  Включить Telegram уведомления
-                </label>
-                
-                <input 
-                  type="password"
-                  placeholder="Bot Token (например: 123456789:ABCdefGHIjklMNOpqrsTUVwxyz)"
-                  value={settings.telegram?.botToken || ''}
-                  onChange={(e) => onSettingsChange('telegram.botToken', e.target.value)}
-                  disabled={!settings.telegram?.enabled}
-                />
-                
-                <input 
-                  type="text"
-                  placeholder="Chat ID (например: -1001234567890 или 123456789)"
-                  value={settings.telegram?.chatId || ''}
-                  onChange={(e) => onSettingsChange('telegram.chatId', e.target.value)}
-                  disabled={!settings.telegram?.enabled}
-                />
-                
-                {settings.telegram?.enabled && settings.telegram?.botToken && settings.telegram?.chatId && (
-                  <button 
-                    className="btn btn-primary"
-                    onClick={() => {
-                      // Тестовое сообщение будет добавлено позже
-                      alert('Тестовое сообщение будет отправлено при публикации');
-                    }}
-                    style={{ marginTop: '10px' }}
-                  >
-                    🧪 Тест отправки сообщения
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
 
           {activeTab === 'admins' && (
             <div className="settings-section">
@@ -316,6 +296,31 @@ const SettingsModal = ({
                     <p>⚠️ Нет администраторов. Пока что редактирование доступно всем.</p>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'cellview' && (
+            <div className="settings-section">
+              <h3>Вид ячейки</h3>
+              <div className="cell-view-settings">
+                <div className="setting-item">
+                  <label className="toggle-setting">
+                    <input 
+                      type="checkbox"
+                      checked={settings.cellView?.showTime !== false}
+                      onChange={(e) => onSettingsChange('cellView', {
+                        ...settings.cellView,
+                        showTime: e.target.checked
+                      })}
+                    />
+                    <span className="toggle-slider"></span>
+                    <span className="toggle-label">Выводить время смены в названии</span>
+                  </label>
+                  <div className="setting-description">
+                    Если включено - показывает время смены (10:00-23:50), если выключено - показывает символ смены (У, Д, В, Н)
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -375,6 +380,58 @@ const SettingsModal = ({
                   <button 
                     className="btn btn-primary"
                     onClick={onSendTestMessage}
+                    style={{ marginTop: '10px' }}
+                  >
+                    🧪 Тест отправки сообщения
+                  </button>
+                )}
+              </div>
+              
+              <div className="settings-divider"></div>
+              
+              <h3>Telegram Bot</h3>
+              <div className="telegram-settings">
+                <div className="telegram-info">
+                  <p><strong>📋 Инструкция по настройке:</strong></p>
+                  <ol>
+                    <li>Создайте бота через <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer">@BotFather</a></li>
+                    <li>Получите токен бота</li>
+                    <li>Добавьте бота в чат или найдите Chat ID через <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer">@userinfobot</a></li>
+                    <li>Введите данные ниже и включите уведомления</li>
+                  </ol>
+                </div>
+                
+                <label>
+                  <input 
+                    type="checkbox"
+                    checked={settings.telegram?.enabled || false}
+                    onChange={(e) => onSettingsChange('telegram.enabled', e.target.checked)}
+                  />
+                  Включить Telegram уведомления
+                </label>
+                
+                <input 
+                  type="password"
+                  placeholder="Bot Token (например: 123456789:ABCdefGHIjklMNOpqrsTUVwxyz)"
+                  value={settings.telegram?.botToken || ''}
+                  onChange={(e) => onSettingsChange('telegram.botToken', e.target.value)}
+                  disabled={!settings.telegram?.enabled}
+                />
+                
+                <input 
+                  type="text"
+                  placeholder="Chat ID (например: -1001234567890 или 123456789)"
+                  value={settings.telegram?.chatId || ''}
+                  onChange={(e) => onSettingsChange('telegram.chatId', e.target.value)}
+                  disabled={!settings.telegram?.enabled}
+                />
+                
+                {settings.telegram?.enabled && settings.telegram?.botToken && settings.telegram?.chatId && (
+                  <button 
+                    className="btn btn-primary"
+                    onClick={() => {
+                      alert('Тестовое сообщение будет отправлено при публикации');
+                    }}
                     style={{ marginTop: '10px' }}
                   >
                     🧪 Тест отправки сообщения

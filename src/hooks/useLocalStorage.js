@@ -14,12 +14,11 @@ export const useLocalStorage = (key, defaultValue) => {
             // Убеждаемся что admins всегда существует
             admins: parsedValue.admins || []
           };
-          console.log('🔧 Объединяем настройки:', mergedValue);
           return mergedValue;
         }
         return parsedValue;
       } catch (e) {
-        console.error(`Error loading ${key} from localStorage:`, e);
+        // Handle localStorage error silently
       }
     }
     return defaultValue;

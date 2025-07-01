@@ -13,16 +13,16 @@ library.add(faTelegram, faDownload, faCog, faLock, faLockOpen, faChevronLeft, fa
 
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useAblyConnection } from './hooks/useAblyConnection';
-import { defaultEmployees, defaultShiftTypes, defaultFilters, initialData, defaultTags, dayLabels } from './constants/defaultData';
+import { defaultEmployees, defaultShiftTypes, initialData, defaultTags, defaultWorkingHours } from './constants/defaultData';
 import { injectShiftStyles } from './utils/styleUtils';
 
 import Header from './components/Header';
 import Legend from './components/Legend';
 import GridView from './components/GridView';
 import TimelineView from './components/TimelineView';
-import GanttView from './components/GanttView';
 import SettingsModal from './components/SettingsModal';
 import ShiftAndTagPopup from './components/ShiftAndTagPopup';
+import FlexibleTimeModal from './components/FlexibleTimeModal';
 import AuthModal from './components/AuthModal';
 import CalendarNavigation from './components/CalendarNavigation';
 
@@ -31,6 +31,7 @@ function App() {
     employees: defaultEmployees,
     shiftTypes: defaultShiftTypes,
     tags: defaultTags,
+    workingHours: defaultWorkingHours,
     websocket: {
       url: '',
       apiKey: '',
@@ -43,13 +44,9 @@ function App() {
       chatId: ''
     },
     admins: [],
-    debug: true  // Включаем отладку для диагностики
+    debug: false
   });
 
-  // Отладочная информация при изменении администраторов
-  useEffect(() => {
-    console.log('👥 Администраторы изменились:', settings.admins);
-  }, [settings.admins]);
 
   const [schedule, setSchedule] = useLocalStorage('schedule-planner-data', () => {
     const initial = {};
@@ -65,8 +62,14 @@ function App() {
   });
 
   const [currentView, setCurrentView] = useLocalStorage('schedule-planner-view', 'grid');
+  
+  // Миграция: заменяем старое значение 'gantt' на 'timeline'
+  React.useEffect(() => {
+    if (currentView === 'gantt') {
+      setCurrentView('timeline');
+    }
+  }, []);
   const [selectedDay, setSelectedDay] = useLocalStorage('schedule-planner-selected-day', null);
-  const [filters, setFilters] = useLocalStorage('schedule-planner-filters', defaultFilters);
   const [cellTags, setCellTags] = useLocalStorage('schedule-planner-tags', {});
   
   // Новые состояния для расширенного календаря
@@ -89,35 +92,27 @@ function App() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useLocalStorage('schedule-planner-auth', true); // По умолчанию разрешено редактирование
   const [authModal, setAuthModal] = useState(false);
+  const [flexibleTimeModal, setFlexibleTimeModal] = useState({ open: false, empIndex: null, dayIndex: null });
+  const [flexibleShifts, setFlexibleShifts] = useLocalStorage('schedule-planner-flexible-shifts', {});
 
   const handleScheduleUpdate = (newSchedule) => {
     setSchedule(newSchedule);
   };
 
   const handleSettingsUpdate = (newSettings) => {
-    console.log('🔄 Получено обновление настроек из WebSocket:', newSettings);
     setSettings(prev => {
-      console.log('📋 Предыдущие настройки:', prev);
-      
-      // Убеждаемся что все поля корректно обрабатываются
       const updatedSettings = {
         ...prev,
         employees: newSettings.employees !== undefined ? newSettings.employees : prev.employees,
         shiftTypes: newSettings.shiftTypes !== undefined ? newSettings.shiftTypes : prev.shiftTypes,
         tags: newSettings.tags !== undefined ? newSettings.tags : prev.tags,
-        // Особая обработка для администраторов - если пришел undefined, сохраняем текущих
         admins: newSettings.admins !== undefined ? newSettings.admins : (prev.admins || []),
         websocket: newSettings.websocket !== undefined ? newSettings.websocket : prev.websocket,
         telegram: newSettings.telegram !== undefined ? newSettings.telegram : prev.telegram,
         debug: newSettings.debug !== undefined ? newSettings.debug : (prev.debug || false)
       };
       
-      console.log('✅ Обновленные настройки:', updatedSettings);
-      console.log('👥 Администраторы после обновления:', updatedSettings.admins);
-      
-      // Если администраторы изменились, сбрасываем аутентификацию
       if (newSettings.admins !== undefined && JSON.stringify(newSettings.admins) !== JSON.stringify(prev.admins || [])) {
-        console.log('🔐 Сбрасываем аутентификацию из-за изменения администраторов');
         setIsAuthenticated(false);
       }
       
@@ -129,45 +124,23 @@ function App() {
     setCellTags(newCellTags);
   };
 
-  // Функция для обработки обновлений состояния аутентификации от других браузеров
   const handleAuthStateUpdate = (isAuthenticated, admins) => {
-    console.log('🔄 Получено обновление состояния аутентификации:', { isAuthenticated, admins });
-    
-    // Обновляем администраторов в настройках
     if (admins && admins.length > 0) {
       setSettings(prev => ({
         ...prev,
         admins: admins
       }));
       
-      // Принудительно сохраняем в localStorage
       const newSettings = { ...settings, admins: admins };
       localStorage.setItem('schedule-planner-settings', JSON.stringify(newSettings));
-      console.log('💾 Администраторы синхронизированы и сохранены');
     }
     
-    // Обновляем состояние аутентификации
     setIsAuthenticated(isAuthenticated);
-    console.log('🔐 Состояние аутентификации обновлено:', isAuthenticated);
   };
 
   const { connectionState, onlineUsers, publishScheduleUpdate, publishSettingsUpdate, publishCellTagsUpdate, publishAuthStateUpdate, sendTestMessage, sendPushNotification: sendWebSocketPushNotification } = 
     useAblyConnection(settings, schedule, cellTags, handleScheduleUpdate, handleSettingsUpdate, handleCellTagsUpdate, handleAuthStateUpdate);
 
-  // Отладочная информация при загрузке
-  useEffect(() => {
-    console.log('🚀 Приложение загружено');
-    console.log('📋 Текущие настройки при загрузке:', settings);
-    console.log('👥 Администраторы при загрузке:', settings.admins);
-    console.log('🔐 Аутентификация при загрузке:', localStorage.getItem('schedule-planner-auth'));
-    console.log('🌐 WebSocket настройки:', settings.websocket);
-    console.log('🔗 Состояние подключения:', connectionState);
-  }, []);
-
-  // Отладочная информация при изменении состояния подключения
-  useEffect(() => {
-    console.log('🔗 Состояние WebSocket изменилось:', connectionState);
-  }, [connectionState]);
 
   // Функция генерации дат для текущего периода
   const generateDayLabels = (startDate, days) => {
@@ -177,7 +150,7 @@ function App() {
       
       // Проверяем что дата валидна
       if (isNaN(start.getTime())) {
-        console.error('❌ Невалидная дата в generateDayLabels:', startDate);
+        // Invalid date fallback
         // Fallback на сегодняшнюю дату
         const today = new Date();
         const dayOfWeek = today.getDay();
@@ -207,13 +180,32 @@ function App() {
       }
       return labels;
     } catch (error) {
-      console.error('❌ Ошибка в generateDayLabels:', error);
+      // Error fallback
       // Fallback на сегодняшнюю дату
       const today = new Date();
       const dayOfWeek = today.getDay();
       const monday = new Date(today);
       monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
       return generateDayLabels(monday.toISOString().split('T')[0], days);
+    }
+  };
+
+  // Функция для определения типа дня (выходной, 1-е число)
+  const getDayType = (dayIndex) => {
+    try {
+      const start = new Date(currentStartDate);
+      if (isNaN(start.getTime())) return { isWeekend: false, isFirstOfMonth: false };
+      
+      const targetDate = new Date(start);
+      targetDate.setDate(start.getDate() + dayIndex);
+      
+      const dayOfWeek = targetDate.getDay();
+      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6; // Sunday or Saturday
+      const isFirstOfMonth = targetDate.getDate() === 1;
+      
+      return { isWeekend, isFirstOfMonth };
+    } catch (error) {
+      return { isWeekend: false, isFirstOfMonth: false };
     }
   };
 
@@ -226,7 +218,7 @@ function App() {
       const start = new Date(currentStartDate);
       // Проверяем что дата валидна
       if (isNaN(start.getTime())) {
-        console.error('❌ Невалидная дата в currentStartDate:', currentStartDate);
+        // Invalid date fallback
         // Возвращаем сегодняшнюю дату как fallback
         const today = new Date();
         const targetDate = new Date(today);
@@ -238,7 +230,7 @@ function App() {
       targetDate.setDate(start.getDate() + dayIndex);
       return targetDate.toISOString().split('T')[0];
     } catch (error) {
-      console.error('❌ Ошибка в getDateFromIndex:', error);
+      // Error fallback
       // Fallback на сегодняшнюю дату
       const today = new Date();
       const targetDate = new Date(today);
@@ -338,18 +330,26 @@ function App() {
   const handleShiftTypeChange = (key, field, value) => {
     const newShiftTypes = {
       ...settings.shiftTypes,
-      [key]: { ...settings.shiftTypes[key], [field]: value }
+      [key]: { ...settings.shiftTypes[key] }
     };
     
-    if (field === 'start' || field === 'end' || field === 'startMinutes' || field === 'endMinutes') {
-      const shiftType = newShiftTypes[key];
-      if (shiftType.start !== null && shiftType.end !== null) {
-        const startMinutes = shiftType.startMinutes || 0;
-        const endMinutes = shiftType.endMinutes || 0;
-        const startTime = `${shiftType.start.toString().padStart(2, '0')}:${startMinutes.toString().padStart(2, '0')}`;
-        const endTime = `${shiftType.end.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
-        newShiftTypes[key].time = `${startTime}-${endTime}`;
-      }
+    if (field === 'startTime') {
+      newShiftTypes[key].start = value.hours;
+      newShiftTypes[key].startMinutes = value.minutes;
+    } else if (field === 'endTime') {
+      newShiftTypes[key].end = value.hours;
+      newShiftTypes[key].endMinutes = value.minutes;
+    } else {
+      newShiftTypes[key][field] = value;
+    }
+    
+    // Обновляем строку времени если есть и начало и конец
+    if (newShiftTypes[key].start !== null && newShiftTypes[key].end !== null) {
+      const startMinutes = newShiftTypes[key].startMinutes || 0;
+      const endMinutes = newShiftTypes[key].endMinutes || 0;
+      const startTime = `${newShiftTypes[key].start.toString().padStart(2, '0')}:${startMinutes.toString().padStart(2, '0')}`;
+      const endTime = `${newShiftTypes[key].end.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
+      newShiftTypes[key].time = `${startTime}-${endTime}`;
     }
     
     const newSettings = { ...settings, shiftTypes: newShiftTypes };
@@ -415,6 +415,46 @@ function App() {
     setPopup({ open: false, empIndex: null, dayIndex: null });
   };
 
+  const handleFlexibleShiftClick = () => {
+    // Открываем модальное окно для выбора времени
+    setFlexibleTimeModal({ 
+      open: true, 
+      empIndex: popup.empIndex, 
+      dayIndex: popup.dayIndex 
+    });
+    setPopup({ open: false, empIndex: null, dayIndex: null });
+  };
+
+  const handleFlexibleTimeConfirm = (startTime, endTime) => {
+    const { empIndex, dayIndex } = flexibleTimeModal;
+    if (empIndex === null || dayIndex === null) return;
+
+    // Сохраняем гибкую смену
+    const flexibleKey = `${empIndex}-${dayIndex}`;
+    const newFlexibleShifts = {
+      ...flexibleShifts,
+      [flexibleKey]: {
+        start: startTime.hours,
+        startMinutes: startTime.minutes || 0,
+        end: endTime.hours,
+        endMinutes: endTime.minutes || 0,
+        empIndex,
+        dayIndex
+      }
+    };
+    setFlexibleShifts(newFlexibleShifts);
+
+    // Устанавливаем тип смены как flexible
+    setScheduleByDate(empIndex, dayIndex, 'flexible');
+    
+    setFlexibleTimeModal({ open: false, empIndex: null, dayIndex: null });
+  };
+
+  const getFlexibleShiftData = (empIndex, dayIndex) => {
+    const flexibleKey = `${empIndex}-${dayIndex}`;
+    return flexibleShifts[flexibleKey];
+  };
+
   const handleCellClick = (empIndex, dayIndex) => {
     // Проверяем авторизацию
     if (!checkAuthentication()) {
@@ -455,26 +495,20 @@ function App() {
 
   const handleDateClick = (dayIndex) => {
     setSelectedDay(dayIndex);
-    setCurrentView('gantt');
+    setCurrentView('timeline');
   };
 
-  const toggleFilter = (filterType) => {
-    setFilters(prev => ({
-      ...prev,
-      [filterType]: !prev[filterType]
-    }));
+  const handleViewSwitch = (view) => {
+    if (view === 'timeline' && selectedDay === null) {
+      // Автоматически выбираем первый день при переходе в timeline
+      setSelectedDay(0);
+    }
+    setCurrentView(view);
   };
 
   const shouldShowEmployee = (empIndex) => {
-    for (let day = 0; day < viewPeriod; day++) {
-      const shiftType = getScheduleByDate(empIndex, day);
-      
-      // Проверяем пустые ячейки (undefined или пустая строка)
-      if ((!shiftType || shiftType === '') && filters.empty) return true;
-      // Проверяем смены
-      if (shiftType && shiftType !== '' && filters[shiftType]) return true;
-    }
-    return false;
+    // Показываем всех сотрудников (фильтр удален)
+    return true;
   };
 
   const toggleBulkEdit = () => {
@@ -491,7 +525,6 @@ function App() {
   const exportData = () => {
     const data = {
       schedule,
-      filters,
       currentView,
       selectedDay,
       exportDate: new Date().toISOString(),
@@ -524,14 +557,13 @@ function App() {
           setSchedule(data.schedule);
           publishScheduleUpdate(data.schedule);
         }
-        if (data.filters) setFilters(data.filters);
         if (data.currentView) setCurrentView(data.currentView);
         if (data.selectedDay !== undefined) setSelectedDay(data.selectedDay);
         
         alert('Данные успешно импортированы!');
       } catch (error) {
         alert('Ошибка при импорте данных. Проверьте формат файла.');
-        console.error('Import error:', error);
+        // Import error
       }
     };
     reader.readAsText(file);
@@ -541,45 +573,31 @@ function App() {
   // Функции управления администраторами
   const handleAdminChange = (index, field, value) => {
     const currentAdmins = settings.admins || [];
-    console.log('🔧 Изменяем администратора:', { index, field, value, currentAdmins });
     
-    // Убеждаемся что администратор с данным индексом существует
     if (index >= currentAdmins.length) {
-      console.error('❌ Попытка изменить несуществующего администратора:', index);
       return;
     }
     
     const newAdmins = [...currentAdmins];
     newAdmins[index] = { ...newAdmins[index], [field]: value };
     const newSettings = { ...settings, admins: newAdmins };
-    console.log('📦 Новые настройки с админами:', newSettings);
     
-    // Принудительно сохраняем в localStorage
     localStorage.setItem('schedule-planner-settings', JSON.stringify(newSettings));
-    console.log('💾 Принудительно сохранено в localStorage');
     
     setSettings(newSettings);
     publishSettingsUpdate(newSettings);
-    
-    // Отправляем обновленный список администраторов в другие браузеры
     publishAuthStateUpdate(isAuthenticated, newAdmins);
-    console.log('📡 Отправлены обновленные администраторы в другие браузеры');
   };
 
   const handleRemoveAdmin = (index) => {
     const newAdmins = settings.admins.filter((_, i) => i !== index);
     const newSettings = { ...settings, admins: newAdmins };
     
-    // Принудительно сохраняем в localStorage
     localStorage.setItem('schedule-planner-settings', JSON.stringify(newSettings));
-    console.log('💾 Администратор удален и сохранено в localStorage');
     
     setSettings(newSettings);
     publishSettingsUpdate(newSettings);
-    
-    // Отправляем обновленный список администраторов в другие браузеры
     publishAuthStateUpdate(isAuthenticated, newAdmins);
-    console.log('📡 Отправлены обновленные администраторы в другие браузеры');
   };
 
   const handleAddAdmin = () => {
@@ -590,19 +608,12 @@ function App() {
     const currentAdmins = settings.admins || [];
     const newAdmins = [...currentAdmins, newAdmin];
     const newSettings = { ...settings, admins: newAdmins };
-    console.log('🔧 Добавляем администратора:', newAdmin);
-    console.log('📦 Новые настройки:', newSettings);
     
-    // Принудительно сохраняем в localStorage
     localStorage.setItem('schedule-planner-settings', JSON.stringify(newSettings));
-    console.log('💾 Принудительно сохранено в localStorage');
     
     setSettings(newSettings);
     publishSettingsUpdate(newSettings);
-    
-    // Отправляем обновленный список администраторов в другие браузеры
     publishAuthStateUpdate(isAuthenticated, newAdmins);
-    console.log('📡 Отправлены обновленные администраторы в другие браузеры');
   };
 
   // Проверка авторизации
@@ -626,9 +637,7 @@ function App() {
   // Функция блокировки редактирования
   const handleLock = () => {
     setIsAuthenticated(false);
-    // Отправляем состояние блокировки в другие браузеры
     publishAuthStateUpdate(false, settings.admins || []);
-    console.log('🔒 Отправлено состояние блокировки в другие браузеры');
   };
 
   const clearAllData = () => {
@@ -647,7 +656,6 @@ function App() {
       publishScheduleUpdate(emptySchedule);
       publishCellTagsUpdate(emptyCellTags);
       
-      setFilters(defaultFilters);
       setCurrentView('grid');
       setSelectedDay(null);
       setBulkEditMode(false);
@@ -797,7 +805,7 @@ function App() {
               body: message,
               icon: '/icon.svg',
               tag: 'schedule-update',
-              badge: '/icon32.png'
+              badge: 'icons/icon32.png'
             });
           }
         });
@@ -808,7 +816,6 @@ function App() {
   // Функция для генерации PDF расписания
   const generateSchedulePDF = async () => {
     try {
-      console.log('🔄 Начинаем генерацию PDF...');
       
       // Создаем временный элемент для PDF
       const scheduleElement = document.querySelector('.schedule-grid');
@@ -888,7 +895,6 @@ function App() {
       pdfContainer.appendChild(clonedElement);
       document.body.appendChild(pdfContainer);
 
-      console.log('📸 Создаем снимок расписания...');
 
       // Генерируем изображение из HTML с оптимизированными настройками
       const canvas = await html2canvas(pdfContainer, {
@@ -904,7 +910,6 @@ function App() {
       // Удаляем временный элемент
       document.body.removeChild(pdfContainer);
 
-      console.log('📄 Создаем PDF документ...');
 
       // Создаем PDF
       const pdf = new jsPDF('l', 'mm', 'a4'); // landscape orientation
@@ -951,12 +956,10 @@ function App() {
         }
       }
       
-      console.log('✅ PDF успешно создан');
       
       // Возвращаем PDF как blob для отправки
       return pdf.output('blob');
     } catch (error) {
-      console.error('❌ Ошибка при генерации PDF:', error);
       throw error;
     }
   };
@@ -988,14 +991,11 @@ function App() {
       const result = await response.json();
       
       if (result.ok) {
-        console.log('✅ PDF успешно отправлен в Telegram с превью');
         return true;
       } else {
-        console.error('❌ Ошибка отправки PDF в Telegram:', result);
         return false;
       }
     } catch (error) {
-      console.error('❌ Ошибка при отправке PDF в Telegram:', error);
       return false;
     }
   };
@@ -1023,14 +1023,11 @@ function App() {
       const result = await response.json();
       
       if (result.ok) {
-        console.log('✅ Сообщение успешно отправлено в Telegram');
         return true;
       } else {
-        console.error('❌ Ошибка отправки в Telegram:', result);
         return false;
       }
     } catch (error) {
-      console.error('❌ Ошибка при отправке в Telegram:', error);
       return false;
     }
   };
@@ -1038,7 +1035,6 @@ function App() {
   // Обработчик кнопки "Опубликовать"
   const handlePublish = async () => {
     try {
-      console.log('🚀 Начинаем публикацию расписания...');
       
       // Отправляем текущее расписание
       publishScheduleUpdate(schedule);
@@ -1058,7 +1054,6 @@ function App() {
       
       // Отправляем уведомление и PDF в Telegram
       if (settings.telegram?.enabled) {
-        console.log('📱 Отправляем в Telegram...');
         
         // Сначала отправляем PDF (более быстрый способ)
         let pdfSent = false;
@@ -1066,17 +1061,15 @@ function App() {
           const pdfBlob = await generateSchedulePDF();
           pdfSent = await sendPDFToTelegram(pdfBlob);
         } catch (pdfError) {
-          console.error('❌ Ошибка генерации/отправки PDF:', pdfError);
+          // PDF generation/send error
         }
         
         // Затем отправляем дополнительное текстовое сообщение (если нужно)
         let messageSent = true; // PDF уже содержит всю нужную информацию
         
         if (pdfSent) {
-          console.log('✅ Публикация завершена успешно');
           alert('✅ Расписание успешно опубликовано!\n📊 PDF с превью отправлен в Telegram.');
         } else {
-          console.log('⚠️ Публикация завершена с ошибками');
           // Отправляем хотя бы текстовое уведомление
           const currentDate = new Date().toLocaleDateString('ru-RU');
           const currentTime = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
@@ -1094,11 +1087,9 @@ function App() {
           }
         }
       } else {
-        console.log('✅ Локальная публикация завершена');
         alert('✅ Расписание успешно опубликовано!');
       }
     } catch (error) {
-      console.error('❌ Критическая ошибка при публикации:', error);
       alert('❌ Ошибка при публикации расписания. Попробуйте еще раз.');
     }
   };
@@ -1116,7 +1107,6 @@ function App() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Ошибка при скачивании PDF:', error);
       alert('Ошибка при создании PDF файла. Попробуйте еще раз.');
     }
   };
@@ -1131,7 +1121,7 @@ function App() {
         connectionState={connectionState}
         onlineUsers={onlineUsers}
         websocketEnabled={settings.websocket.enabled}
-        onViewSwitch={setCurrentView}
+        onViewSwitch={handleViewSwitch}
         onBulkEditToggle={toggleBulkEdit}
         onSettingsOpen={() => {
           if (!checkAuthentication()) {
@@ -1150,6 +1140,7 @@ function App() {
         onLock={handleLock}
         isAuthenticated={checkAuthentication()}
         hasAdmins={settings.admins && settings.admins.length > 0}
+        dayLabels={dynamicDayLabels}
       />
       
       <div className="content">
@@ -1162,8 +1153,6 @@ function App() {
         
         <Legend 
           shiftTypes={settings.shiftTypes}
-          filters={filters}
-          onFilterToggle={toggleFilter}
         />
 
         {currentView === 'grid' && (
@@ -1184,31 +1173,26 @@ function App() {
             onCellRightClick={handleCellRightClick}
             onDateClick={handleDateClick}
             shouldShowEmployee={shouldShowEmployee}
+            getDayType={getDayType}
+            cellViewSettings={settings.cellView}
+            getFlexibleShiftData={getFlexibleShiftData}
+            onFlexibleTimeUpdate={(empIndex, dayIndex, timeData) => {
+              const flexibleKey = `${empIndex}-${dayIndex}`;
+              setFlexibleShifts(prev => ({
+                ...prev,
+                [flexibleKey]: {
+                  ...timeData,
+                  empIndex,
+                  dayIndex
+                }
+              }));
+            }}
           />
         )}
 
-        {currentView === 'timeline' && (
+
+        {currentView === 'timeline' && selectedDay !== null && (
           <TimelineView 
-            employees={settings.employees}
-            schedule={schedule}
-            shiftTypes={settings.shiftTypes}
-            selectedCells={selectedCells}
-            bulkEditMode={bulkEditMode}
-            cellTags={cellTags}
-            tags={settings.tags}
-            dayLabels={dynamicDayLabels}
-            viewPeriod={viewPeriod}
-            getScheduleByDate={getScheduleByDate}
-            getCellTagsByDate={getCellTagsByDate}
-            getDateKey={getDateKey}
-            onCellClick={handleCellClick}
-            onCellRightClick={handleCellRightClick}
-            shouldShowEmployee={shouldShowEmployee}
-          />
-        )}
-
-        {currentView === 'gantt' && selectedDay !== null && (
-          <GanttView 
             employees={settings.employees}
             schedule={schedule}
             shiftTypes={settings.shiftTypes}
@@ -1222,6 +1206,19 @@ function App() {
             onDaySelect={setSelectedDay}
             onTagClick={handleTagClick}
             shouldShowEmployee={shouldShowEmployee}
+            getFlexibleShiftData={getFlexibleShiftData}
+            onFlexibleShiftUpdate={(empIndex, dayIndex, timeData) => {
+              const flexibleKey = `${empIndex}-${dayIndex}`;
+              setFlexibleShifts(prev => ({
+                ...prev,
+                [flexibleKey]: {
+                  ...timeData,
+                  empIndex,
+                  dayIndex
+                }
+              }));
+            }}
+            workingHours={settings.workingHours}
           />
         )}
 
@@ -1233,8 +1230,15 @@ function App() {
           selectedCells={selectedCells}
           bulkEditMode={bulkEditMode}
           onShiftChange={handleShiftChange}
+          onFlexibleShiftClick={handleFlexibleShiftClick}
           onTagToggle={handleTagToggle}
           onClose={() => setPopup({ open: false, empIndex: null, dayIndex: null, selectedTags: [] })}
+        />
+
+        <FlexibleTimeModal
+          isOpen={flexibleTimeModal.open}
+          onClose={() => setFlexibleTimeModal({ open: false, empIndex: null, dayIndex: null })}
+          onConfirm={handleFlexibleTimeConfirm}
         />
 
         <SettingsModal 

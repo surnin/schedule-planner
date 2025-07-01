@@ -1,15 +1,14 @@
 import React from 'react';
 
-const Legend = ({ shiftTypes, filters, onFilterToggle }) => {
+const Legend = ({ shiftTypes }) => {
   return (
     <div className="legend">
-      <div className="filter-header">Фильтры:</div>
-      <div className="filter-items">
+      <div className="legend-header">Легенда:</div>
+      <div className="legend-items">
         {Object.entries(shiftTypes).map(([key, shiftType]) => (
           <div 
             key={key}
-            className={`legend-item filter ${filters[key] ? 'active' : 'inactive'}`}
-            onClick={() => onFilterToggle(key)}
+            className="legend-item"
             title={shiftType.label}
           >
             <div className={`legend-color shift-${key}`}></div>
@@ -17,8 +16,7 @@ const Legend = ({ shiftTypes, filters, onFilterToggle }) => {
           </div>
         ))}
         <div 
-          className={`legend-item filter ${filters.empty ? 'active' : 'inactive'}`}
-          onClick={() => onFilterToggle('empty')}
+          className="legend-item"
           title="Пустые ячейки"
         >
           <div className="legend-color empty-shift"></div>

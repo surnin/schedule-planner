@@ -1,27 +1,41 @@
 import React from 'react';
-import { generateTimeOptions, timeToMinutes, minutesToTime, formatTime } from '../utils/timeUtils';
 
-const TimeSelect = ({ value, onChange, placeholder = "Выберите время", stepMinutes = 10 }) => {
-  const timeOptions = generateTimeOptions(stepMinutes);
+const TimeSelect = ({ value, onChange, placeholder = "Выберите время", stepMinutes = 30 }) => {
+  // Простой список с разумным количеством опций
+  const timeOptions = [];
+  for (let hour = 0; hour < 24; hour++) {
+    for (let minute = 0; minute < 60; minute += stepMinutes) {
+      const totalMinutes = hour * 60 + minute;
+      const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+      timeOptions.push({
+        value: totalMinutes,
+        label: timeString,
+        hours: hour,
+        minutes: minute
+      });
+    }
+  }
   
-  // Конвертируем значение в минуты для сравнения
+  // Текущее значение
   let selectedValue = '';
-  if (typeof value === 'number') {
-    selectedValue = value * 60; // если value в часах
-  } else if (typeof value === 'object' && value.hours !== undefined) {
-    selectedValue = timeToMinutes(value.hours, value.minutes || 0);
+  if (typeof value === 'object' && value.hours !== undefined) {
+    selectedValue = value.hours * 60 + (value.minutes || 0);
+  } else if (typeof value === 'number') {
+    selectedValue = value * 60;
   }
   
   const handleChange = (e) => {
     const totalMinutes = parseInt(e.target.value);
-    const time = minutesToTime(totalMinutes);
+    if (isNaN(totalMinutes)) return;
     
-    // Возвращаем в формате, совместимом с текущей системой
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    
     onChange({
-      hours: time.hours,
-      minutes: time.minutes,
+      hours: hours,
+      minutes: minutes,
       totalMinutes: totalMinutes,
-      formatted: formatTime(time.hours, time.minutes)
+      formatted: `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
     });
   };
   
@@ -29,7 +43,7 @@ const TimeSelect = ({ value, onChange, placeholder = "Выберите врем�
     <select 
       value={selectedValue} 
       onChange={handleChange}
-      className="time-select"
+      className="time-select-simple"
     >
       <option value="">{placeholder}</option>
       {timeOptions.map((option) => (

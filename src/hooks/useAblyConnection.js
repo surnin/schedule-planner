@@ -9,17 +9,12 @@ export const useAblyConnection = (settings, schedule, cellTags, onScheduleUpdate
   const [connectionState, setConnectionState] = useState('disconnected');
   const [onlineUsers, setOnlineUsers] = useState(new Set());
 
-  const debugLog = (message, ...args) => {
-    if (settings.debug) {
-      console.log(message, ...args);
-    }
-  };
 
   const connectToAbly = async () => {
     if (!settings.websocket.enabled || 
         !settings.websocket.apiKey.trim() || 
         !settings.websocket.roomId.trim()) {
-      debugLog('Недостаточно данных для подключения к Ably');
+      setConnectionState('disconnected');
       return;
     }
 
@@ -36,80 +31,50 @@ export const useAblyConnection = (settings, schedule, cellTags, onScheduleUpdate
 
       ablyClient.current.connection.on('connected', () => {
         setConnectionState('connected');
-        debugLog('Подключено к Ably. Client ID:', myClientId.current);
-        debugLog('Room ID:', settings.websocket.roomId);
       });
 
       ablyClient.current.connection.on('disconnected', () => {
         setConnectionState('disconnected');
-        debugLog('Отключено от Ably');
       });
 
-      ablyClient.current.connection.on('failed', (error) => {
+      ablyClient.current.connection.on('failed', () => {
         setConnectionState('failed');
-        console.error('Ошибка подключения к Ably:', error);
       });
 
       const roomId = settings.websocket.roomId.trim();
       channel.current = ablyClient.current.channels.get(roomId);
-      debugLog('Подключаемся к каналу:', roomId);
 
-      channel.current.on('attached', () => {
-        debugLog('✅ Канал подключен и готов к работе');
-      });
-
-      channel.current.on('failed', (err) => {
-        console.error('❌ Ошибка канала:', err);
-      });
 
       channel.current.subscribe('schedule-update', (message) => {
-        debugLog('📨 Получено обновление расписания:', message.data);
-        debugLog('👤 От пользователя:', message.data?.userId, 'Мой ID:', myClientId.current);
         if (message.data && message.data.schedule && message.data.userId !== myClientId.current) {
-          debugLog('✅ Применяем изменения расписания от другого пользователя');
           onScheduleUpdate(message.data.schedule);
-        } else {
-          debugLog('⏭️ Игнорируем собственное сообщение');
         }
       });
 
       channel.current.subscribe('settings-update', (message) => {
-        debugLog('Получено обновление настроек:', message.data);
         if (message.data && message.data.settings && message.data.userId !== myClientId.current) {
-          debugLog('Применяем изменения настроек от другого пользователя');
           onSettingsUpdate(message.data.settings);
         }
       });
 
       channel.current.subscribe('celltags-update', (message) => {
-        debugLog('Получено обновление тегов ячеек:', message.data);
         if (message.data && message.data.cellTags && message.data.userId !== myClientId.current) {
-          debugLog('Применяем изменения тегов ячеек от другого пользователя');
           onCellTagsUpdate(message.data.cellTags);
         }
       });
 
-      // Новый канал для синхронизации состояния аутентификации
       channel.current.subscribe('auth-state-update', (message) => {
-        debugLog('Получено обновление состояния аутентификации:', message.data);
         if (message.data && message.data.userId !== myClientId.current && onAuthStateUpdate) {
-          debugLog('Применяем изменения состояния аутентификации от другого пользователя');
           onAuthStateUpdate(message.data.isAuthenticated, message.data.admins);
         }
       });
 
       channel.current.subscribe('test-message', (message) => {
-        debugLog('🧪 Получено тестовое сообщение:', message.data);
-        if (message.data.userId !== myClientId.current) {
-          debugLog('✅ Тест синхронизации прошел успешно!');
-        }
+        // Test message received
       });
 
       channel.current.subscribe('push-notification', (message) => {
-        debugLog('📱 Получено push уведомление:', message.data);
         if (message.data && message.data.userId !== myClientId.current) {
-          debugLog('✅ Показываем push уведомление от другого пользователя');
-          // Показываем уведомление
           if ('Notification' in window && Notification.permission === 'granted') {
             new Notification(message.data.title || 'Уведомление', {
               body: message.data.message || '',
@@ -135,7 +100,6 @@ export const useAblyConnection = (settings, schedule, cellTags, onScheduleUpdate
       });
 
     } catch (error) {
-      console.error('Ошибка при подключении к Ably:', error);
       setConnectionState('failed');
     }
   };
@@ -143,19 +107,24 @@ export const useAblyConnection = (settings, schedule, cellTags, onScheduleUpdate
   const disconnectFromAbly = () => {
     if (channel.current) {
       try {
-        channel.current.presence.leave();
+        if (channel.current.state === 'attached') {
+          channel.current.presence.leave();
+        }
         channel.current.unsubscribe();
+        channel.current.detach();
       } catch (error) {
-        debugLog('Ошибка при отключении канала (норм):', error.message);
+        // Connection cleanup - ignore errors during disconnect
       }
       channel.current = null;
     }
 
     if (ablyClient.current) {
       try {
-        ablyClient.current.close();
+        if (ablyClient.current.connection.state !== 'closed') {
+          ablyClient.current.close();
+        }
       } catch (error) {
-        debugLog('Ошибка при закрытии клиента (норм):', error.message);
+        // Client cleanup - ignore errors during disconnect
       }
       ablyClient.current = null;
     }
@@ -166,29 +135,21 @@ export const useAblyConnection = (settings, schedule, cellTags, onScheduleUpdate
   };
 
   const publishScheduleUpdate = (newSchedule) => {
-    debugLog('🔄 Попытка отправки обновления расписания');
-    debugLog('📊 State - channel:', !!channel.current, 'connected:', connectionState === 'connected');
-    
-    if (channel.current && connectionState === 'connected') {
+    if (channel.current && connectionState === 'connected' && channel.current.state === 'attached') {
       const message = {
         schedule: newSchedule,
         timestamp: new Date().toISOString(),
         userId: myClientId.current
       };
-      debugLog('📤 Отправляем обновление расписания:', message);
       
-      channel.current.publish('schedule-update', message).then(() => {
-        debugLog('✅ Сообщение успешно отправлено');
-      }).catch((error) => {
-        console.error('❌ Ошибка отправки сообщения:', error);
+      channel.current.publish('schedule-update', message).catch(() => {
+        // Handle publish error silently
       });
-    } else {
-      debugLog('❌ Не можем отправить: канал не готов или не подключен');
     }
   };
 
   const publishSettingsUpdate = (newSettings) => {
-    if (channel.current && connectionState === 'connected') {
+    if (channel.current && connectionState === 'connected' && channel.current.state === 'attached') {
       const message = {
         settings: {
           employees: newSettings.employees,
@@ -198,47 +159,41 @@ export const useAblyConnection = (settings, schedule, cellTags, onScheduleUpdate
         timestamp: new Date().toISOString(),
         userId: myClientId.current
       };
-      debugLog('Отправляем обновление настроек:', message);
       channel.current.publish('settings-update', message);
     }
   };
 
   const publishCellTagsUpdate = (newCellTags) => {
-    if (channel.current && connectionState === 'connected') {
+    if (channel.current && connectionState === 'connected' && channel.current.state === 'attached') {
       const message = {
         cellTags: newCellTags,
         timestamp: new Date().toISOString(),
         userId: myClientId.current
       };
-      debugLog('Отправляем обновление тегов ячеек:', message);
       channel.current.publish('celltags-update', message);
     }
   };
 
   const sendTestMessage = () => {
-    if (channel.current && connectionState === 'connected') {
+    if (channel.current && connectionState === 'connected' && channel.current.state === 'attached') {
       const testMessage = {
         test: true,
         timestamp: new Date().toISOString(),
         userId: myClientId.current
       };
-      debugLog('🧪 Отправляем тестовое сообщение');
       channel.current.publish('test-message', testMessage);
     }
   };
 
   const sendPushNotification = (title, message) => {
-    if (channel.current && connectionState === 'connected') {
+    if (channel.current && connectionState === 'connected' && channel.current.state === 'attached') {
       const notificationData = {
         title,
         message,
         timestamp: new Date().toISOString(),
         userId: myClientId.current
       };
-      debugLog('📱 Отправляем push уведомление через WebSocket:', notificationData);
       channel.current.publish('push-notification', notificationData);
-    } else {
-      debugLog('❌ Не можем отправить push уведомление: канал не готов');
     }
   };
 
@@ -264,17 +219,14 @@ export const useAblyConnection = (settings, schedule, cellTags, onScheduleUpdate
   }, [settings.websocket.enabled, settings.websocket.apiKey, settings.websocket.roomId]);
 
   const publishAuthStateUpdate = (isAuthenticated, admins) => {
-    if (channel.current && connectionState === 'connected') {
+    if (channel.current && connectionState === 'connected' && channel.current.state === 'attached') {
       const message = {
         isAuthenticated,
         admins,
         timestamp: new Date().toISOString(),
         userId: myClientId.current
       };
-      debugLog('📡 Отправляем обновление состояния аутентификации:', message);
       channel.current.publish('auth-state-update', message);
-    } else {
-      debugLog('❌ Не можем отправить обновление состояния аутентификации: канал не готов');
     }
   };
 

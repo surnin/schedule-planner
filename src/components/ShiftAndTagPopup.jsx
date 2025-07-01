@@ -8,6 +8,7 @@ const ShiftAndTagPopup = ({
   selectedCells,
   bulkEditMode,
   onShiftChange,
+  onFlexibleShiftClick,
   onTagToggle,
   onClose
 }) => {
@@ -51,10 +52,18 @@ const ShiftAndTagPopup = ({
                   <div 
                     key={key} 
                     className={`shift-option shift-${key}`} 
-                    onClick={() => onShiftChange(key)}
+                    onClick={() => {
+                      if (shiftType.isFlexible) {
+                        onFlexibleShiftClick && onFlexibleShiftClick();
+                      } else {
+                        onShiftChange(key);
+                      }
+                    }}
                   >
                     <div className="shift-option-content">
-                      <span className="shift-label">{shiftType.label}</span>
+                      <span className="shift-label">
+                        {shiftType.isFlexible ? 'Свободная' : shiftType.label}
+                      </span>
                       {shiftType.time && <span className="shift-time">{shiftType.time}</span>}
                     </div>
                   </div>
