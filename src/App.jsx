@@ -641,36 +641,7 @@ function App() {
     setCurrentView(view);
   };
 
-  // Функция для фильтрации сотрудников по должности
-  const getFilteredEmployees = () => {
-    if (selectedPosition === 'all') {
-      return settings.employees;
-    }
-    return settings.employees.filter(emp => {
-      const empPosition = typeof emp === 'string' ? '' : emp.position;
-      return empPosition === selectedPosition;
-    });
-  };
-
-  // Функция для получения индекса в полном списке по индексу в отфильтрованном
-  const getFullEmployeeIndex = (filteredIndex) => {
-    if (selectedPosition === 'all') {
-      return filteredIndex;
-    }
-    
-    const filteredEmployees = getFilteredEmployees();
-    const targetEmployee = filteredEmployees[filteredIndex];
-    if (!targetEmployee) return filteredIndex;
-    
-    const targetName = typeof targetEmployee === 'string' ? targetEmployee : targetEmployee.name;
-    
-    return settings.employees.findIndex(emp => {
-      const empName = typeof emp === 'string' ? emp : emp.name;
-      return empName === targetName;
-    });
-  };
-
-  const shouldShowEmployee = (empIndex) => {
+  const shouldShowEmployee = () => {
     return true;
   };
 
