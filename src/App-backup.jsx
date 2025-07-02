@@ -13,8 +13,10 @@ library.add(faTelegram, faDownload, faCog, faLock, faLockOpen, faChevronLeft, fa
 
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useAblyConnection } from './hooks/useAblyConnection';
+import { useScheduleLogic } from './hooks/useScheduleLogic';
+import { useEmployeeManagement } from './hooks/useEmployeeManagement';
+import { useShiftManagement } from './hooks/useShiftManagement';
 import { defaultEmployees, defaultShiftTypes, initialData, defaultTags, defaultWorkingHours, defaultPositions } from './constants/defaultData';
-import { injectShiftStyles } from './utils/styleUtils';
 
 import Header from './components/Header';
 import Legend from './components/Legend';
@@ -27,6 +29,7 @@ import AuthModal from './components/AuthModal';
 import CalendarNavigation from './components/CalendarNavigation';
 
 function App() {
+  // Settings state
   const [settings, setSettings] = useLocalStorage('schedule-planner-settings', {
     employees: defaultEmployees,
     positions: defaultPositions,
@@ -48,70 +51,19 @@ function App() {
     debug: false
   });
 
+  // Authentication state
+  const [isAuthenticated, setIsAuthenticated] = useLocalStorage('schedule-planner-auth', true);
+  const [authModal, setAuthModal] = useState(false);
 
-  const [schedule, setSchedule] = useLocalStorage('schedule-planner-data', () => {
-    const initial = {};
-    settings.employees.forEach((emp, empIndex) => {
-      for (let day = 0; day < 14; day++) {
-        const key = `${empIndex}-${day}`;
-        const empName = typeof emp === 'string' ? emp : emp.name;
-        if (initialData[empName] && day < initialData[empName].length) {
-          initial[key] = initialData[empName][day];
-        }
-      }
-    });
-    return initial;
-  });
-
-  const [currentView, setCurrentView] = useLocalStorage('schedule-planner-view', 'grid');
-  
-  // Миграция: заменяем старое значение 'gantt' на 'timeline'
-  React.useEffect(() => {
-    if (currentView === 'gantt') {
-      setCurrentView('timeline');
-    }
-  }, []);
-
-  // Миграция: добавляем positions если их нет
-  React.useEffect(() => {
-    if (!settings.positions || settings.positions.length === 0) {
-      setSettings(prev => ({
-        ...prev,
-        positions: defaultPositions
-      }));
-    }
-  }, []);
-  const [selectedDay, setSelectedDay] = useLocalStorage('schedule-planner-selected-day', null);
-  const [cellTags, setCellTags] = useLocalStorage('schedule-planner-tags', {});
-  
-  // Новые состояния для расширенного календаря
-  const getDefaultStartDate = () => {
-    // Начинаем с текущего понедельника
-    const today = new Date();
-    const dayOfWeek = today.getDay();
-    const monday = new Date(today);
-    monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
-    return monday.toISOString().split('T')[0];
-  };
-  
-  const [currentStartDate, setCurrentStartDate] = useLocalStorage('schedule-planner-start-date', getDefaultStartDate());
-  const [viewPeriod, setViewPeriod] = useLocalStorage('schedule-planner-view-period', 14);
-
+  // UI state
   const [popup, setPopup] = useState({ open: false, empIndex: null, dayIndex: null, selectedTags: [] });
   const [settingsModal, setSettingsModal] = useState(false);
   const [bulkEditMode, setBulkEditMode] = useState(false);
   const [selectedCells, setSelectedCells] = useState(new Set());
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useLocalStorage('schedule-planner-auth', true); // По умолчанию разрешено редактирование
-  const [authModal, setAuthModal] = useState(false);
   const [flexibleTimeModal, setFlexibleTimeModal] = useState({ open: false, empIndex: null, dayIndex: null });
-  const [flexibleShifts, setFlexibleShifts] = useLocalStorage('schedule-planner-flexible-shifts', {});
-  const [selectedPosition, setSelectedPosition] = useLocalStorage('schedule-planner-position-filter', 'all');
 
-  const handleScheduleUpdate = (newSchedule) => {
-    setSchedule(newSchedule);
-  };
-
+  // Settings update handler
   const handleSettingsUpdate = (newSettings) => {
     setSettings(prev => {
       const updatedSettings = {
@@ -135,30 +87,97 @@ function App() {
     });
   };
 
-  const handleCellTagsUpdate = (newCellTags) => {
-    setCellTags(newCellTags);
-  };
-
+  // Initialize Ably connection first to get publishers
   const handleAuthStateUpdate = (isAuthenticated, admins) => {
     if (admins && admins.length > 0) {
       setSettings(prev => ({
         ...prev,
         admins: admins
       }));
-      
-      const newSettings = { ...settings, admins: admins };
-      localStorage.setItem('schedule-planner-settings', JSON.stringify(newSettings));
     }
-    
     setIsAuthenticated(isAuthenticated);
   };
 
-  const { connectionState, onlineUsers, publishScheduleUpdate, publishSettingsUpdate, publishCellTagsUpdate, publishAuthStateUpdate, sendTestMessage, sendPushNotification: sendWebSocketPushNotification } = 
-    useAblyConnection(settings, schedule, cellTags, handleScheduleUpdate, handleSettingsUpdate, handleCellTagsUpdate, handleAuthStateUpdate);
+  // Temporary state for initial Ably connection
+  const [tempSchedule] = useState({});
+  const [tempCellTags] = useState({});
 
+  const {
+    connectionState,
+    onlineUsers,
+    publishScheduleUpdate,
+    publishSettingsUpdate,
+    publishCellTagsUpdate,
+    publishAuthStateUpdate,
+    sendTestMessage,
+    sendPushNotification,
+    requestExistingData
+  } = useAblyConnection(
+    settings,
+    tempSchedule,
+    tempCellTags,
+    () => {}, // Temporary handlers
+    handleSettingsUpdate,
+    () => {},
+    handleAuthStateUpdate
+  );
 
-  // Функция генерации дат для текущего периода
-  const generateDayLabels = (startDate, days) => {
+  // Initialize custom hooks with publishers
+  const scheduleLogic = useScheduleLogic(settings, publishScheduleUpdate, publishCellTagsUpdate);
+  const employeeManagement = useEmployeeManagement(settings, handleSettingsUpdate);
+  const shiftManagement = useShiftManagement(settings, handleSettingsUpdate, publishCellTagsUpdate);
+
+  // Use hooks data and functions instead of local ones
+  const {
+    schedule,
+    currentView,
+    selectedDay,
+    currentStartDate,
+    viewPeriod,
+    flexibleShifts,
+    cellTags,
+    setCurrentView,
+    setSelectedDay,
+    setCurrentStartDate,
+    setViewPeriod,
+    getScheduleByDate,
+    setScheduleByDate,
+    getCellTagsByDate,
+    setCellTagsByDate,
+    getFlexibleShiftData,
+    handleFlexibleTimeConfirm,
+    generateDayLabels,
+    getDayType,
+    getDateKey,
+    handleDateClick,
+    handleViewSwitch,
+    clearAllData
+  } = scheduleLogic;
+
+  const {
+    selectedPosition,
+    filteredEmployees,
+    getFullEmployeeIndex,
+    shouldShowEmployee,
+    handleEmployeeChange,
+    handleRemoveEmployee,
+    handleAddEmployee,
+    handlePositionChange,
+    handleRemovePosition,
+    handleAddPosition,
+    handlePositionFilterChange
+  } = employeeManagement;
+
+  const {
+    handleShiftTypeChange,
+    handleRemoveShiftType,
+    handleAddShiftType,
+    handleWorkingHoursChange,
+    getShiftDisplay
+  } = shiftManagement;
+
+  // REMOVE old function definitions that are now handled by hooks
+  // const generateDayLabels = (startDate, days) => {
     try {
       const labels = [];
       const start = new Date(startDate);
@@ -641,36 +660,8 @@ function App() {
     setCurrentView(view);
   };
 
-  // Функция для фильтрации сотрудников по должности
-  const getFilteredEmployees = () => {
-    if (selectedPosition === 'all') {
-      return settings.employees;
-    }
-    return settings.employees.filter(emp => {
-      const empPosition = typeof emp === 'string' ? '' : emp.position;
-      return empPosition === selectedPosition;
-    });
-  };
-
-  // Функция для получения индекса в полном списке по индексу в отфильтрованном
-  const getFullEmployeeIndex = (filteredIndex) => {
-    if (selectedPosition === 'all') {
-      return filteredIndex;
-    }
-    
-    const filteredEmployees = getFilteredEmployees();
-    const targetEmployee = filteredEmployees[filteredIndex];
-    if (!targetEmployee) return filteredIndex;
-    
-    const targetName = typeof targetEmployee === 'string' ? targetEmployee : targetEmployee.name;
-    
-    return settings.employees.findIndex(emp => {
-      const empName = typeof emp === 'string' ? emp : emp.name;
-      return empName === targetName;
-    });
-  };
-
   const shouldShowEmployee = (empIndex) => {
+    // Показываем всех сотрудников (фильтр удален)
     return true;
   };
 
@@ -1332,18 +1323,9 @@ function App() {
             tags={settings.tags}
             dayLabels={dynamicDayLabels}
             viewPeriod={viewPeriod}
-            getScheduleByDate={(filteredEmpIndex, dayIndex) => {
-              const empIndex = getFullEmployeeIndex(filteredEmpIndex);
-              return getScheduleByDate(empIndex, dayIndex);
-            }}
-            getCellTagsByDate={(filteredEmpIndex, dayIndex) => {
-              const empIndex = getFullEmployeeIndex(filteredEmpIndex);
-              return getCellTagsByDate(empIndex, dayIndex);
-            }}
-            getDateKey={(filteredEmpIndex, dayIndex) => {
-              const empIndex = getFullEmployeeIndex(filteredEmpIndex);
-              return getDateKey(empIndex, dayIndex);
-            }}
+            getScheduleByDate={getScheduleByDate}
+            getCellTagsByDate={getCellTagsByDate}
+            getDateKey={getDateKey}
             onCellClick={handleCellClick}
             onCellRightClick={handleCellRightClick}
             onDateClick={handleDateClick}
@@ -1376,20 +1358,11 @@ function App() {
             cellTags={cellTags}
             tags={settings.tags}
             dayLabels={dynamicDayLabels}
-            getScheduleByDate={(filteredEmpIndex, dayIndex) => {
-              const empIndex = getFullEmployeeIndex(filteredEmpIndex);
-              return getScheduleByDate(empIndex, dayIndex);
-            }}
-            getCellTagsByDate={(filteredEmpIndex, dayIndex) => {
-              const empIndex = getFullEmployeeIndex(filteredEmpIndex);
-              return getCellTagsByDate(empIndex, dayIndex);
-            }}
+            getScheduleByDate={getScheduleByDate}
+            getCellTagsByDate={getCellTagsByDate}
             onBackToGrid={() => setCurrentView('grid')}
             onDaySelect={setSelectedDay}
-            onTagClick={(filteredEmpIndex, dayIndex) => {
-              const empIndex = getFullEmployeeIndex(filteredEmpIndex);
-              handleTagClick(empIndex, dayIndex);
-            }}
+            onTagClick={handleTagClick}
             shouldShowEmployee={shouldShowEmployee}
             getFlexibleShiftData={getFlexibleShiftData}
             onFlexibleShiftUpdate={(filteredEmpIndex, dayIndex, timeData) => {

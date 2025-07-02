@@ -79,7 +79,6 @@ const Header = ({
             >
               <FontAwesomeIcon icon={faTelegram} />
             </button>
-            <div className="btn-divider"></div>
             <button 
               className="header-btn download"
               onClick={onDownloadPDF}

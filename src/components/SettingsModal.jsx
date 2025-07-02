@@ -168,6 +168,36 @@ const SettingsModal = ({
             </div>
           )}
 
+          {activeTab === 'positions' && (
+            <div className="settings-section">
+              <h3>Должности</h3>
+              <button 
+                className="add-btn"
+                onClick={onAddPosition}
+              >
+                + Добавить должность
+              </button>
+              <div className="positions-list">
+                {(settings.positions || []).map((position, index) => (
+                  <div key={index} className="position-item">
+                    <input 
+                      type="text" 
+                      value={position}
+                      onChange={(e) => onPositionChange(index, e.target.value)}
+                      placeholder="Название должности"
+                    />
+                    <button 
+                      className="remove-btn"
+                      onClick={() => onRemovePosition(index)}
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {activeTab === 'shifts' && (
             <div className="settings-section">
               <h3>Типы смен</h3>

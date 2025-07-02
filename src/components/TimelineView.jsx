@@ -348,7 +348,9 @@ const TimelineView = ({
               
               return (
                 <div key={empIndex} className="timeline-row">
-                  <div className="timeline-employee-name">{typeof employee === 'string' ? employee : employee.name}</div>
+                  <div className="timeline-employee-name">
+                    {typeof employee === 'string' ? employee : employee.name}
+                  </div>
                   <div className="timeline-timeline" ref={timelineRef}>
                     {timeScale.map((timePoint, index) => (
                       <div key={index} className="timeline-hour-cell"></div>

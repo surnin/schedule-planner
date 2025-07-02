@@ -7,9 +7,9 @@ const CalendarNavigation = ({
   viewPeriod, 
   onStartDateChange,
   dynamicDayLabels,
-  positions,
-  selectedPosition,
-  onPositionChange
+  positions = [],
+  selectedPosition = 'all',
+  onPositionChange = () => {}
 }) => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const dateRangeRef = useRef(null);
@@ -136,14 +136,16 @@ const CalendarNavigation = ({
       
       <div className="calendar-nav-right">
         <div className="position-filter">
+          <label htmlFor="position-select">Должность:</label>
           <select 
-            value={selectedPosition} 
-            onChange={(e) => onPositionChange(e.target.value)}
+            id="position-select"
             className="position-select"
+            value={selectedPosition}
+            onChange={(e) => onPositionChange(e.target.value)}
           >
             <option value="all">Все должности</option>
-            {positions?.map(position => (
-              <option key={position} value={position}>
+            {positions.map((position, index) => (
+              <option key={index} value={position}>
                 {position}
               </option>
             ))}

@@ -1,7 +1,3 @@
-export const defaultPositions = [
-  'Администратор', 'Мастер', 'Стажер', 'Консультант', 'Менеджер'
-];
-
 export const defaultEmployees = [
   { name: 'Ильвина', position: 'Администратор' },
   { name: 'Инесса', position: 'Мастер' },
@@ -14,6 +10,10 @@ export const defaultEmployees = [
   { name: 'Леся', position: 'Мастер' },
   { name: 'Алия', position: 'Менеджер' },
   { name: 'Даша', position: 'Стажер' }
+];
+
+export const defaultPositions = [
+  'Администратор', 'Мастер', 'Стажер', 'Консультант', 'Менеджер'
 ];
 
 export const defaultShiftTypes = {

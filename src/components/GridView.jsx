@@ -212,7 +212,9 @@ const GridView = ({
           
           return (
             <div className="grid-row" key={empIndex}>
-              <div className="employee-name">{typeof employee === 'string' ? employee : employee.name}</div>
+              <div className="employee-name">
+                {typeof employee === 'string' ? employee : employee.name}
+              </div>
               {Array.from({ length: viewPeriod }, (_, dayIndex) => {
                 const dateKey = getDateKey(empIndex, dayIndex);
                 const shiftType = getScheduleByDate(empIndex, dayIndex);
